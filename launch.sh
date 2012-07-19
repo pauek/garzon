@@ -2,7 +2,7 @@
 
 tceimg=$1
 if [ -z $tceimg ]; then
-   tceimg='tce-good.img'
+   tceimg='tce.img'
 fi
 shift
 
