@@ -22,6 +22,14 @@ function download() {
     popd
 }
 
+function purge() {
+    pushd ${tce}/optional
+    for file in $*; do
+        sudo rm -f ${file}.tcz{,.dep}
+    done
+    popd
+}
+
 function onboot() {
     for file in $*; do
         echo $file | sudo sh -c "cat > ${tce}/onboot.lst"
@@ -63,9 +71,9 @@ function add_go() {
     popd
 
     # Install bash + gcc (+ linux headers)
-    download bash ncurses ncurses-common
-    download gcc gcc_libs binutils gmp mpfr eglibc_base-dev libmpc
-    download linux-3.0.1_api_headers
+    download bash ncurses ncurses-common \
+        gcc gcc_libs binutils gmp mpfr eglibc_base-dev libmpc \
+        linux-3.0.1_api_headers
 
     image umount
 
@@ -82,15 +90,19 @@ poweroff
 EOF
     ) | ./launch.sh ${imgname}.img -serial stdio
 
-    # Set environment
+    # Set environment + erase unneeded packages
     image mount
     sudo sh -c "cat >> ${imgname}/tce/bootlocal.sh" <<EOF
+cat >> /etc/profile.d/go.sh <<INNEREOF
+# Go Environment
 export GOROOT=/mnt/vda/src/go
-export PATH=\$PATH:\$GOROOT/bin
+export PATH=\\\$PATH:\\\$GOROOT/bin
+INNEREOF
 EOF
+    purge bash ncurses ncurses-common \
+        gcc gcc_libs binutils gmp mpfr eglibc_base-dev libmpc \
+        linux-3.0.1_api_headers
     image umount
-
-    # Erase intermediate packages
 }
 
 function add() {
