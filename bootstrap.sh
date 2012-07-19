@@ -14,16 +14,12 @@
 
 mirror="http://l4u-00.jinr.ru/LinuxArchive/Ftp/tinycorelinux/"
 dir="4.x/x86/release/distribution_files/"
-# x86_64=''
-x86_64='64'
+x86_64=''
+# x86_64='64'
 
 function download_kernel_and_initrd() {
-    if ! [ -f core.gz ]; then
-        wget -O core.gz ${mirror}${dir}core${x86_64}.gz
-    fi
-    if ! [ -f vmlinuz ]; then
-        wget -O vmlinuz ${mirror}${dir}vmlinuz${x86_64}
-    fi
+    rm -f core.gz && wget -O core.gz ${mirror}${dir}core${x86_64}.gz
+    rm -f vmlinuz && wget -O vmlinuz ${mirror}${dir}vmlinuz${x86_64}
 }
 
 function create_shared_disk() {
@@ -35,13 +31,21 @@ function remaster_initrd() {
     sudo rm -rf initrd
     mkdir -p initrd
     pushd initrd
+
     # unpack
     zcat ../core.gz | sudo cpio -i -H newc -d 
+
+    # introduce modifications 
     sudo cp $(which driver) usr/bin/driver
     sudo sh -c "cat >> etc/inittab" <<EOF
 # garzon
-ttyS0::once:/usr/bin/driver
+ttyS0::once:/bin/sh
 EOF
+    sudo sh -c "cat >> opt/bootlocal.sh" <<EOF
+# call init script in apps partition
+source /mnt/vda/tce/bootlocal.sh 
+EOF
+
     # repack
     sudo find | sudo cpio -o -H newc | gzip -2 > ../initrd.gz
     popd
