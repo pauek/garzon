@@ -16,8 +16,12 @@ tce=${imgname}/tce
 function download() {
     pushd ${tce}/optional
     for file in $*; do
-        sudo wget ${mirror}${dir}${file}.tcz
-        sudo wget ${mirror}${dir}${file}.tcz.dep
+        if ! [ -f ${file}.tcz ]; then
+            sudo wget ${mirror}${dir}${file}.tcz
+        fi
+        if ! [ -f ${file}.tcz.dep ]; then
+            sudo wget ${mirror}${dir}${file}.tcz.dep
+        fi
     done
     popd
 }
@@ -32,31 +36,33 @@ function purge() {
 
 function onboot() {
     for file in $*; do
-        echo $file | sudo sh -c "cat > ${tce}/onboot.lst"
+        echo $file | sudo sh -c "cat >> ${tce}/onboot.lst"
     done
 }
 
 function image() {
-    case $1 in
-        create)
-            dd if=/dev/zero of=${imgname}.img bs=1M count=500 # 500Mb enough?
-            sudo mkfs.ext3 -F ${imgname}.img ;;
-        mount)
-            mkdir ${imgname}
-            sync
-            sudo mount -o loop ${imgname}.img ${imgname} ;;
-        umount)
-            sync
-            sudo umount ${imgname}
-            rmdir ${imgname} 
-            sync ;;
-        init)
-            sudo mkdir -p ${tce}/{optional,ondemand}
-            sudo touch ${tce}/onboot.lst
-            sudo touch ${tce}/bootlocal.sh # this is called from /opt/bootlocal.sh
-            download mirrors kmaps
-            onboot mirrors.tcz kmaps.tcz ;;
-    esac
+    for cmd in $*; do
+        case $cmd in
+            create)
+                dd if=/dev/zero of=${imgname}.img bs=1M count=500 # 500Mb enough?
+                sudo mkfs.ext3 -F ${imgname}.img ;;
+            mount)
+                mkdir ${imgname}
+                sync
+                sudo mount -o loop ${imgname}.img ${imgname} ;;
+            umount)
+                sync
+                sudo umount ${imgname}
+                rmdir ${imgname} 
+                sync ;;
+            init)
+                sudo mkdir -p ${tce}/{optional,ondemand}
+                sudo touch ${tce}/onboot.lst
+                sudo touch ${tce}/bootlocal.sh # this is called from /opt/bootlocal.sh
+                download mirrors kmaps
+                onboot mirrors.tcz kmaps.tcz ;;
+        esac
+    done
 }
 
 
@@ -88,7 +94,7 @@ export PATH=/usr/local/bin:\$PATH
 bash ./make.bash
 poweroff
 EOF
-    ) | ./launch.sh ${imgname}.img -serial stdio
+    ) | ./launch.sh ${imgname}.img -serial stdio -m 512M
 
     # Set environment + erase unneeded packages
     image mount
@@ -99,30 +105,26 @@ export GOROOT=/mnt/vda/src/go
 export PATH=\\\$PATH:\\\$GOROOT/bin
 INNEREOF
 EOF
-    purge bash ncurses ncurses-common \
-        gcc gcc_libs binutils gmp mpfr eglibc_base-dev libmpc \
-        linux-3.0.1_api_headers
+    purge bash ncurses ncurses-common linux-3.0.1_api_headers
+    # purge gcc gcc_libs binutils gmp mpfr eglibc_base-dev libmpc ??
     image umount
 }
 
 function add() {
-    list=""
-    case $1 in 
-        gcc)
-            image mount
-            download gcc gcc_libs binutils gmp mpfr eglibc_base-dev libmpc 
-            sudo sh -c "echo eglibc_base-dev.tcz >> ${tce}/optional/gcc.tcz.dep"
-            onboot gcc.tcz 
-            image umount ;;
-        go)
-            add_go ;;
-    esac
+    for pkg in $*; do
+        list=""
+        case $pkg in 
+            gcc)
+                image mount
+                download gcc gcc_libs binutils gmp mpfr eglibc_base-dev libmpc 
+                sudo sh -c "echo eglibc_base-dev.tcz >> ${tce}/optional/gcc.tcz.dep"
+                onboot gcc.tcz 
+                image umount ;;
+            go)
+                add_go ;;
+        esac
+    done
 }
 
-# Do it
-image create
-image mount
-image init
-image umount
-# add gcc
-add go
+image create mount init umount
+add go gcc

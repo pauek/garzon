@@ -8,8 +8,8 @@ shift
 
 kvm -kernel vmlinuz \
     -initrd initrd.gz \
-    -append "tce=vda kmap=qwerty/es vga=788" \
+    -append "tce=vda kmap=qwerty/es vga=788 nodhcp" \
     -drive file=${tceimg},if=virtio \
     -drive file=shared.img,if=virtio \
-    -m 512M \
+    -net none \
     $*
