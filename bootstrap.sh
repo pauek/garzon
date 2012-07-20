@@ -23,7 +23,7 @@ function download_kernel_and_initrd() {
 }
 
 function create_shared_disk() {
-    qemu-img create shared.img 50M
+    qemu-img create -f qcow2 shared.img 50M
 }
 
 function remaster_initrd() {
