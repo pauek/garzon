@@ -7,7 +7,7 @@ import (
 	"os/exec"
 )
 
-func createProblemIso() {
+func createProblemIso(filename string) {
 	// create dir 'current' (if it doesn't exist)
 	err := os.MkdirAll("current", 0700)
 	if err != nil {
@@ -36,7 +36,7 @@ func createProblemIso() {
 		"-f",                // follow symlinks
 		"-file-mode", "400", // read-only for tc
 		"-uid", "5000",      // garzon user = 5000 (tc = 1001)
-		"-o", "shared.iso",
+		"-o", filename,
 		"current")
 
 	output, err := geniso.CombinedOutput()
@@ -50,7 +50,7 @@ var qemu = new(QEmu)
 
 func eval() {
 	qemu.Restore()
-	createProblemIso()
+	createProblemIso("shared.iso")
 	qemu.Monitor("change ide1-cd0 shared.iso") // insert CD-ROM in the VM
 	qemu.Shell("mount /dev/cdrom /mnt/cdrom")
 	qemu.Shell("su garzon")
@@ -58,6 +58,10 @@ func eval() {
 	qemu.Shell("exit")
 	qemu.Shell("umount /mnt/cdrom")
 	qemu.Monitor("eject ide1-cd0")
+	err := os.Remove("shared.iso")
+	if err != nil {
+		log.Printf("Cannot remove 'shared.iso'")
+	}
 }
 
 func prepare() {
@@ -71,7 +75,7 @@ func main() {
 	// prepare()
 
 	qemu.LoadVM()
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 5; i++ {
 		eval()
 	}
 	qemu.Quit()
