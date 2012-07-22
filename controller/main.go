@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -17,10 +18,11 @@ type QEmu struct {
 	stdout bytes.Buffer
 	stderr bytes.Buffer
 	mon    net.Conn
+	numcommands int
 }
 
 func (Q *QEmu) Start() {
-	var err error 
+	var err error
 
 	// 1. Execute QEMU
 	Q.cmd = exec.Command("kvm",
@@ -54,20 +56,50 @@ func (Q *QEmu) Start() {
 	}
 	log.Printf("... connected.")
 	Q.mon.Write([]byte{0x01, 0x63}) // send "ctrl+a c"
+
+	// wait until VM is up
+	time.Sleep(4 * time.Second)
+}
+
+var buf = make([]byte, 1000)
+
+func (Q *QEmu) waitMonitorPrompt() {
+	Q.mon.SetDeadline(time.Now().Add(10 * time.Second))
+	var response string
+	for {
+		n, _ := Q.mon.Read(buf)
+		response += string(buf[:n])
+		if strings.HasSuffix(response, "(qemu) ") {
+			break
+		}
+	}
+	log.Printf("Monitor response:\n%s", response)
 }
 
 func (Q *QEmu) Monitor(cmd string) {
-	Q.mon.Write([]byte(cmd + "\n"))
-	time.Sleep(100 * time.Millisecond) // wait a bit
+	if Q.numcommands == 0 {
+		Q.waitMonitorPrompt()
+	}
+	Q.numcommands++
+	log.Printf("Monitor: '%s'", cmd)
+	Q.mon.Write([]byte(cmd + "\n")) // emit command
+	Q.waitMonitorPrompt()
 }
 
 func (Q *QEmu) Shell(cmd string) {
+	Q.stdin.Write([]byte(cmd + "\n"))
+	log.Printf("shell: '%s'", cmd)
 	Q.stdout.Reset()
-	
+	time.Sleep(100 * time.Millisecond) // wait a bit (hack...)
+	out := Q.stdout.String()
+	n := strings.Index(out, "\n")
+	log.Printf("Output:\n%s", out[n+1:])
 }
 
 func (Q *QEmu) Quit() {
-	Q.Monitor("quit")
+	log.Printf("Ending QEMU")
+
+	Q.mon.Write([]byte("quit\n")) // don't wait
 	Q.mon.Close()
 
 	log.Printf("Waiting for QEMU to finish...")
@@ -79,6 +111,19 @@ func (Q *QEmu) Quit() {
 	log.Printf("... bye!")
 }
 
+func (Q *QEmu) Save() {
+	log.Printf("Saving state...")
+	Q.Monitor("delvm 1")
+	Q.Monitor("savevm") // no params -> assigns ID 1 (+ tag vm-XXXX)
+	log.Printf("...saved.")
+}
+
+func (Q *QEmu) Restore() {
+	log.Printf("Restoring state...")
+	Q.Monitor("loadvm 1")
+	log.Printf("...restored.")
+}
+
 func CreateProblemIso() {
 	// create dir 'current' (if it doesn't exist)
 	err := os.MkdirAll("current", 0700)
@@ -87,6 +132,10 @@ func CreateProblemIso() {
 	}
 
 	// link problem
+	err = os.Remove("current/problem")
+	if err != nil {
+		log.Printf("Cannot remote 'current/problem': %s", err)
+	}
 	err = os.Symlink(
 		"/pub/Academio/Problems/Cpp/ficheros/SumaEnteros.prog/",
 		"current/problem",
@@ -103,7 +152,7 @@ func CreateProblemIso() {
 	geniso := exec.Command("genisoimage",
 		"-f",                // follow symlinks
 		"-file-mode", "400", // read-only for tc
-		"-uid", "1001", // tc user = 1001
+		"-uid", "5000",      // garzon user = 5000 (tc = 1001)
 		"-o", "shared.iso",
 		"current")
 
@@ -114,20 +163,33 @@ func CreateProblemIso() {
 	}
 }
 
-func main() {
-	qemu := new(QEmu)
-	qemu.Start()
+var qemu = new(QEmu)
 
+func eval() {
+	qemu.Restore()
 	CreateProblemIso()
 	qemu.Monitor("change ide1-cd0 shared.iso") // insert CD-ROM in the VM
+	qemu.Shell("mount /dev/cdrom /mnt/cdrom")
+	qemu.Shell("su garzon")
+	qemu.Shell("ls -la /mnt/cdrom/problem")
+	qemu.Shell("exit")
+	qemu.Shell("umount /mnt/cdrom")
+	qemu.Monitor("eject ide1-cd0")
+}
+
+func main() {
+	qemu.Start()
+
+	qemu.Save()
+
+	for i := 0; i < 3; i++ {
+		eval()
+	}
 
 	// wait for input
-	fmt.Printf("Press Enter:")
-	var s string
-	fmt.Scanf("%s", &s)
-
-	// Finish
-	log.Printf("Ending QEMU")
+	// fmt.Printf("Press Enter:")
+	// var s string
+	// fmt.Scanf("%s", &s)
 
 	qemu.Quit()
 }
