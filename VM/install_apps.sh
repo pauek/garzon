@@ -5,7 +5,6 @@
 
 mirror="http://l4u-00.jinr.ru/LinuxArchive/Ftp/tinycorelinux/"
 dir="4.x/x86/tcz/"
-x86_64=''
 
 imgname=$1
 if [ -z $1 ]; then

@@ -1,26 +1,14 @@
 #!/bin/bash
 
-# Judge VM bootstrapper
+# Judge VM bootstrapper [remaster part]
 #
 # Create a VM for judging programming contests
 # using Tiny Core Linux with some icing on top...
 # 
 # You need:
 # - to be in the 'sudoers' group.
-# - wget.
 # - Debian packages 'qemu' + 'qemu-kvm'
 # - cpio (already present in most distributions).
-#
-
-mirror="http://l4u-00.jinr.ru/LinuxArchive/Ftp/tinycorelinux/"
-dir="4.x/x86/release/distribution_files/"
-x86_64=''
-# x86_64='64'
-
-function download_kernel_and_initrd() {
-    rm -f core.gz && wget -O core.gz ${mirror}${dir}core${x86_64}.gz
-    rm -f vmlinuz && wget -O vmlinuz ${mirror}${dir}vmlinuz${x86_64}
-}
 
 function remaster_initrd() {
 # Unpack
@@ -66,8 +54,4 @@ EOF
     sudo rm -rf initrd
 }
 
-read -p "Download kernel and initrd? (y/n): "
-if [ $REPLY = "y" -o $REPLY = "Y" ]; then
-   download_kernel_and_initrd
-fi
 remaster_initrd
