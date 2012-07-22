@@ -34,6 +34,9 @@ function remaster_initrd() {
     # create mountpoint for iso
     sudo mkdir -p mnt/cdrom
 
+    # WARNING: si pones una '/' delante
+    # de todos los paths tipo 'cat > path' te cargas tu Linux!!
+
     # enable root terminal on serial port
     sudo sh -c "cat >> etc/inittab" <<EOF
 # garzon
