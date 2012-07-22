@@ -34,10 +34,6 @@ function remaster_initrd() {
     # create mountpoint for iso
     sudo mkdir -p mnt/cdrom
 
-    # copy driver program
-    go install garzon/driver
-    sudo cp $(which driver) usr/bin/driver
-
     # enable root terminal on serial port
     sudo sh -c "cat >> etc/inittab" <<EOF
 # garzon
