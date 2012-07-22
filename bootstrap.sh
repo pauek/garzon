@@ -22,10 +22,6 @@ function download_kernel_and_initrd() {
     rm -f vmlinuz && wget -O vmlinuz ${mirror}${dir}vmlinuz${x86_64}
 }
 
-function create_shared_disk() {
-    qemu-img create -f qcow2 shared.img 50M
-}
-
 function remaster_initrd() {
 # Unpack
     sudo rm -rf initrd
@@ -75,5 +71,4 @@ read -p "Download kernel and initrd? (y/n): "
 if [ $REPLY = "y" -o $REPLY = "Y" ]; then
    download_kernel_and_initrd
 fi
-create_shared_disk
 remaster_initrd
