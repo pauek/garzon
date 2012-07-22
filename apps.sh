@@ -61,6 +61,9 @@ function image() {
                 sudo touch ${tce}/bootlocal.sh # this is called from /opt/bootlocal.sh
                 download mirrors kmaps
                 onboot mirrors.tcz kmaps.tcz ;;
+            convert)
+                qemu-img convert -O qcow2 ${imgname}.img tmp.img
+                mv tmp.img ${imgname}.img
         esac
     done
 }
@@ -94,7 +97,12 @@ export PATH=/usr/local/bin:\$PATH
 bash ./make.bash
 poweroff
 EOF
-    ) | ./launch.sh ${imgname}.img -serial stdio -m 512M
+    ) | kvm -kernel vmlinuz \
+            -initrd initrd.gz \
+            -append "tce=vda kmap=qwerty/es vga=788 nodhcp" \
+            -drive file=${imgname}.img,if=virtio \
+            -serial stdio \
+            -m 512M
 
     # Set environment + erase unneeded packages
     image mount
@@ -128,3 +136,4 @@ function add() {
 
 image create mount init umount
 add go gcc
+image convert
