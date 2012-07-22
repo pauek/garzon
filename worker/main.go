@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"os"
 	"os/exec"
@@ -66,6 +67,7 @@ func prepare() {
 }
 
 func main() {
+	flag.Parse()
 	// prepare()
 
 	qemu.LoadVM()

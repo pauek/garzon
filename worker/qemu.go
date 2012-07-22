@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -20,24 +21,34 @@ type QEmu struct {
 	numcommands int
 }
 
-var args = []string{
-	"-kernel", "vmlinuz",
-	"-initrd", "initrd.gz",
+var graphic = flag.Bool("graphic", false, "Show QEmu graphic mode")
+
+var _args = []string{
+	"-kernel", "VM/vmlinuz",
+	"-initrd", "VM/initrd.gz",
 	"-append", `"tce=vda kmap=qwerty/es vga=788 nodhcp"`,
-	"-drive", "file=tce.img,if=virtio",
+	"-drive", "file=VM/tce.img,if=virtio",
 	"-serial", "stdio",
 	"-serial", "mon:unix:monitor,server", // QEMU will wait...
 	"-net", "none",
 }
 
+func args(addargs ...string) (a []string) {
+	a = append(_args, addargs...)
+	if ! *graphic {
+		a = append(a, "-nographic")
+	}
+	return
+}
+
 func (Q *QEmu) Start() {
-	Q.cmd = exec.Command("kvm", args...)
+	Q.cmd = exec.Command("kvm", args()...)
 	Q.start()
 	time.Sleep(4 * time.Second)	// wait until VM is up
 }
 
 func (Q *QEmu) LoadVM() {
-	Q.cmd = exec.Command("kvm", append(args, "-loadvm", "1")...)
+	Q.cmd = exec.Command("kvm", args("-loadvm", "1")...)
 	Q.start()
 	time.Sleep(1 * time.Second)
 }
