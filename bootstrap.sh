@@ -36,6 +36,7 @@ function remaster_initrd() {
     zcat ../core.gz | sudo cpio -i -H newc -d 
 
     # introduce modifications 
+    sudo mkdir -p mnt/cdrom
     sudo cp $(which driver) usr/bin/driver
     sudo sh -c "cat >> etc/inittab" <<EOF
 # garzon
