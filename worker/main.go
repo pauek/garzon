@@ -17,10 +17,10 @@ func createProblemIso(filename string) {
 	// link problem
 	err = os.Remove("current/problem")
 	if err != nil {
-		log.Printf("Cannot remote 'current/problem': %s", err)
+		log.Printf("Cannot remove 'current/problem': %s", err)
 	}
 	err = os.Symlink(
-		"/pub/Academio/Problems/Cpp/ficheros/SumaEnteros.prog/",
+		"/home/pauek/Academio/Problems/Say yes/",
 		"current/problem",
 	)
 	if err != nil {
@@ -72,7 +72,7 @@ func prepare() {
 
 func main() {
 	flag.Parse()
-	// prepare()
+	prepare()
 
 	qemu.LoadVM()
 	for i := 0; i < 5; i++ {
