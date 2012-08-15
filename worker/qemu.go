@@ -44,13 +44,13 @@ func args(addargs ...string) (a []string) {
 func (Q *QEmu) Start() {
 	Q.cmd = exec.Command("kvm", args()...)
 	Q.start()
-	time.Sleep(4 * time.Second)	// wait until VM is up
+	time.Sleep(10 * time.Second)	// wait until VM is up
 }
 
 func (Q *QEmu) LoadVM() {
 	Q.cmd = exec.Command("kvm", args("-loadvm", "1")...)
 	Q.start()
-	time.Sleep(1 * time.Second)
+	time.Sleep(3 * time.Second)
 }
 
 func (Q *QEmu) start() {
@@ -71,7 +71,7 @@ func (Q *QEmu) start() {
 	if err != nil {
 		log.Fatalf("Error executing QEMU: %s", err)
 	}
-	time.Sleep(100 * time.Millisecond) // IMPORTANT: wait before connecting
+	time.Sleep(500 * time.Millisecond) // IMPORTANT: wait before connecting
 
 	// Connect to monitor
 	Q.mon, err = net.Dial("unix", "monitor")
@@ -120,7 +120,7 @@ func (Q *QEmu) shell(cmd string, showOutput bool) {
 	Q.stdin.Write([]byte(cmd + "\n"))
 	log.Printf("shell: '%s'", cmd)
 	Q.stdout.Reset()
-	time.Sleep(100 * time.Millisecond) // wait a bit (hack...)
+	time.Sleep(300 * time.Millisecond) // wait a bit (hack...)
 	out := Q.stdout.String()
 	n := strings.Index(out, "\n")
 	if showOutput {
