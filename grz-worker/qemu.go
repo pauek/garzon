@@ -7,48 +7,54 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
 )
 
 type QEmu struct {
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	stdout bytes.Buffer
-	stderr bytes.Buffer
-	mon    net.Conn
+	Image       string
+	cmd         *exec.Cmd
+	stdin       io.WriteCloser
+	stdout      bytes.Buffer
+	stderr      bytes.Buffer
+	mon         net.Conn
 	numcommands int
 }
 
 var graphic = flag.Bool("graphic", false, "Show QEmu graphic mode")
 
-var _args = []string{
-	"-kernel", "VM/vmlinuz",
-	"-initrd", "VM/initrd.gz",
-	"-append", `"tce=vda kmap=qwerty/es vga=788 nodhcp"`,
-	"-drive", "file=VM/tce.img,if=virtio",
-	"-serial", "stdio",
-	"-serial", "mon:unix:monitor,server", // QEMU will wait...
-	"-net", "none",
-}
-
-func args(addargs ...string) (a []string) {
-	a = append(_args, addargs...)
-	if ! *graphic {
-		a = append(a, "-nographic")
+func (Q *QEmu) args(addargs ...string) (args []string) {
+	root := os.Getenv("GARZON_VMS")
+	args = []string{
+		"-kernel", root + "/vmlinuz",
+		"-initrd", root + "/initrd.gz",
+		"-drive", "file=" + root + "/" + Q.Image + ".img,if=virtio",
+		"-append", `"tce=vda kmap=qwerty/es vga=788 nodhcp"`,
+		"-serial", "stdio",
+		"-serial", "mon:unix:monitor,server", // QEMU will wait...
+		"-net", "none",
+	}
+	args = append(args, addargs...)
+	if !*graphic {
+		args = append(args, "-nographic")
 	}
 	return
 }
 
+func NewVM(image string) *QEmu {
+	return &QEmu{Image: image}
+}
+
 func (Q *QEmu) Start() {
-	Q.cmd = exec.Command("kvm", args()...)
+	Q.cmd = exec.Command("kvm", Q.args()...)
 	Q.start()
-	time.Sleep(10 * time.Second)	// wait until VM is up
+	time.Sleep(10 * time.Second) // wait until VM is up
 }
 
 func (Q *QEmu) LoadVM() {
-	Q.cmd = exec.Command("kvm", args("-loadvm", "1")...)
+	Q.cmd = exec.Command("kvm", Q.args("-loadvm", "1")...)
 	Q.start()
 	time.Sleep(3 * time.Second)
 }

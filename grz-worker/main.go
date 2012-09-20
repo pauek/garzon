@@ -46,7 +46,7 @@ func createProblemIso(filename string) {
 	}
 }
 
-var qemu = new(QEmu)
+var qemu = NewVM("garzon")
 
 func eval() {
 	qemu.Restore()
@@ -54,7 +54,10 @@ func eval() {
 	qemu.Monitor("change ide1-cd0 shared.iso") // insert CD-ROM in the VM
 	qemu.Shell("mount /dev/cdrom /mnt/cdrom")
 	qemu.Shell("su garzon")
+
+	// Ejecutar el judge...
 	qemu.ShellLog("ls -la /mnt/cdrom/problem")
+
 	qemu.Shell("exit")
 	qemu.Shell("umount /mnt/cdrom")
 	qemu.Monitor("eject ide1-cd0")
