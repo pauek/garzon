@@ -41,7 +41,7 @@ function _silent() {
 }
 
 function _purge() {
-    pushd ${tce}/optional
+    pushd tce/optional
     for file in $*; do
         sudo rm -f ${file}.tcz{,.dep}
     done
@@ -230,27 +230,76 @@ go
 EOF
 }
 
+## Installation scripts ####################################################
+
 function _install_gcc() {
+    _image_mount $1
     _download_packages gcc gcc_libs binutils gmp mpfr eglibc_base-dev libmpc 
     echo "eglibc_base-dev.tcz" | sudo sh -c "cat >> tce/optional/gcc.tcz.dep"
     _onboot gcc.tcz
+    _image_umount
 }
 
 function _install_go() {
-    echo "Unimplemented"
-    exit 1
+    imgfile=$1
+    _image_mount ${imgfile} # checks if imgfile exists
+
+    # Decompress source
+    sudo mkdir src
+    pushd src
+    sudo wget http://go.googlecode.com/files/go1.0.2.src.tar.gz
+    sudo tar xzvf go1.0.2.src.tar.gz
+    popd
+
+    # Install bash + gcc (+ linux headers)
+    _download_packages bash ncurses ncurses-common \
+        gcc gcc_libs binutils gmp mpfr eglibc_base-dev libmpc \
+        linux-3.0.1_api_headers
+
+    _image_umount
+
+    # Compile Go inside the VM
+    (sleep 10; cat <<EOF
+su tc -c "tce-load -i bash"
+su tc -c "tce-load -i gcc"
+su tc -c "tce-load -i eglibc_base-dev.tcz"
+su tc -c "tce-load -i linux-3.0.1_api_headers"
+export PATH=/usr/local/bin:\$PATH
+cd /mnt/vda/src/go/src
+bash ./make.bash
+poweroff
+EOF
+    ) | kvm -kernel vmlinuz \
+            -initrd initrd.gz \
+            -append "tce=vda kmap=qwerty/es vga=788 nodhcp" \
+            -drive file=${imgfile},if=virtio \
+            -serial stdio \
+            -m 512M
+
+    # Set environment + erase unneeded packages
+    _image_mount ${imgfile}
+    sudo sh -c "cat >> tce/bootlocal.sh" <<EOF
+cat >> /etc/profile.d/go.sh <<INNEREOF
+# Go Environment
+export GOROOT=/mnt/vda/src/go
+export PATH=\\\$PATH:\\\$GOROOT/bin
+INNEREOF
+EOF
+    _purge bash ncurses ncurses-common linux-3.0.1_api_headers
+    _image_umount
 }
 
+#############################################################################
+
 function install() {
-    _image_mount $1
+    imgfile=$1
     shift
     for pkg in $*; do
         case $pkg in
-            gcc) _install_gcc ;;
-            go)  _install_go ;;
+            gcc) _install_gcc ${imgfile} ;;
+            go)  _install_go  ${imgfile} ;;
         esac
     done
-    _image_umount
 }
 
 function launch() {
