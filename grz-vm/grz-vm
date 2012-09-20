@@ -91,16 +91,6 @@ function _image_init() {
     _onboot mirrors.tcz kmaps.tcz
 }
 
-function _image_convert() {
-    imgname=$1
-    if ! [ -f $imgname ]; then
-        echo "error: image '"$imgname"' doesn't exist"
-        exit 1
-    fi
-    qemu-img convert -O qcow2 ${imgname} __tmp.img
-    mv __tmp.img ${imgname}
-}
-
 # init 
 function download() {
     # Download 'core.gz' and 'vmlinuz' from TinyCoreLinux
@@ -302,6 +292,27 @@ function install() {
     done
 }
 
+function convert() {
+    infile=$1
+    outfile=$2
+    if ! [ -f $infile ]; then
+        echo "error: image '"$infile"' doesn't exist"
+        exit 1
+    fi
+    if [ -f $outfile ]; then
+        echo "File '"${outfile}"' exists, overwrite (y/n)? "
+        read resp
+        if [ $resp == "y" ]; then
+            rm $outfile
+        else
+            exit 1
+        fi
+    fi
+    # using __tmp.img in case infile == outfile
+    qemu-img convert -O qcow2 ${infile} __tmp.img
+    mv __tmp.img ${outfile}
+}
+
 function launch() {
     imgname=$1
     if ! [ -f $imgname ]; then
@@ -336,6 +347,7 @@ command:
     createimg <file.img>
     pkglist
     install <file.img> packages...
+    convert <infile.img> <outfile.img>
     launch <file.img> [-nographic]
 
 EOF

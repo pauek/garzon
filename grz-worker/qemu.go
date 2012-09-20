@@ -30,7 +30,7 @@ func (Q *QEmu) args(addargs ...string) (args []string) {
 	args = []string{
 		"-kernel", root + "/vmlinuz",
 		"-initrd", root + "/initrd.gz",
-		"-drive", "file=" + root + "/" + Q.Image + ".img,if=virtio",
+		"-drive", "file=" + root + "/" + Q.Image + ",if=virtio",
 		"-append", `"tce=vda kmap=qwerty/es vga=788 nodhcp"`,
 		"-serial", "stdio",
 		"-serial", "mon:unix:monitor,server", // QEMU will wait...
@@ -140,8 +140,14 @@ func (Q *QEmu) Quit() {
 	Q.mon.Write([]byte("quit\n")) // don't wait
 	Q.mon.Close()
 
+	// Erase file 'monitor'
+	err := os.Remove("monitor")
+	if err != nil {
+		log.Printf("Cannot remove 'monitor': %s", err)
+	}
+
 	log.Printf("Waiting for QEMU to finish...")
-	err := Q.cmd.Wait()
+	err = Q.cmd.Wait()
 	if err != nil {
 		fmt.Printf("err: %s", Q.stderr.String())
 		log.Fatalf("Wait: %s", err)

@@ -27,7 +27,11 @@ Creating a Virtual Machine for Garzon
   ...
   $ grz-vm install my.img gcc go ...
 
-6. Launch
+6. Convert image to qcow2 (enable snapshots)
+ 
+  $ grz-vm convert my.img my.qcow2
 
-  $ grz-vm launch my.img
-  $ grz-vm launch my.img -nographic
+7. Launch
+
+  $ grz-vm launch my.qcow2
+  $ grz-vm launch my.qcow2 -nographic

@@ -46,7 +46,7 @@ func createProblemIso(filename string) {
 	}
 }
 
-var qemu = NewVM("garzon")
+var qemu *QEmu
 
 func eval() {
 	qemu.Restore()
@@ -67,19 +67,25 @@ func eval() {
 	}
 }
 
-func prepare() {
-	qemu.Start()
-	qemu.Save()
-	qemu.Quit()
-}
+var image string
+var prepare bool
 
 func main() {
+	flag.StringVar(&image, "image", "gcc.qcow2", "Specify image file to use")
+	flag.BoolVar(&prepare, "prepare", false, "Only create the snapshot")
 	flag.Parse()
-	prepare()
 
-	qemu.LoadVM()
-	for i := 0; i < 5; i++ {
-		eval()
+	qemu = NewVM(image)
+
+
+	if prepare {
+		qemu.Start()
+		qemu.Save()
+		qemu.Quit()
+	} else {
+		qemu.LoadVM()
+		qemu.ShellLog("cat /etc/fstab")
+		// eval()
+		qemu.Quit()
 	}
-	qemu.Quit()
 }
