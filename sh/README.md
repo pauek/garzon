@@ -1,4 +1,7 @@
 
+Creating a Virtual Machine for Garzon
+-------------------------------------
+
 1. Create directory ('VMs'), change into it.
 
   $ mkdir VMs
@@ -6,9 +9,7 @@
 
 2. Download TinyCoreLinux Files
 
-  $ site=http://distro.ibiblio.org/tinycorelinux/4.x/x86/release/distribution_files/
-  $ wget $site/core.gz
-  $ wget $site/vmlinuz
+  $ grz-vm download
 
 3. Remaster core.gz into initrd.gz
 
@@ -16,7 +17,7 @@
  
 4. Create disk image
 
-  $ grz-vm createimage garzon.img
+  $ grz-vm createimg my.img
 
 5. Install 'packages'
 
@@ -24,8 +25,9 @@
   gcc
   go
   ...
-  $ grz-vm install garzon.img gcc go ...
+  $ grz-vm install my.img gcc go ...
 
 6. Launch
 
-  $ grz-vm launch garzon.img
+  $ grz-vm launch my.img
+  $ grz-vm launch my.img -nographic
