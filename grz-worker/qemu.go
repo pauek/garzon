@@ -14,13 +14,12 @@ import (
 )
 
 type QEmu struct {
-	Image       string
-	cmd         *exec.Cmd
-	stdin       io.WriteCloser
-	stdout      bytes.Buffer
-	stderr      bytes.Buffer
-	mon         net.Conn
-	numcommands int
+	Image     string
+	cmd       *exec.Cmd
+	stdin     io.WriteCloser
+	stdout    bytes.Buffer
+	stderr    bytes.Buffer
+	mon       net.Conn
 }
 
 var graphic = flag.Bool("graphic", false, "Show QEmu graphic mode")
@@ -51,12 +50,14 @@ func (Q *QEmu) Start() {
 	Q.cmd = exec.Command("kvm", Q.args()...)
 	Q.start()
 	time.Sleep(10 * time.Second) // wait until VM is up
+	log.Printf("Ready.")
 }
 
 func (Q *QEmu) LoadVM() {
 	Q.cmd = exec.Command("kvm", Q.args("-loadvm", "1")...)
 	Q.start()
-	time.Sleep(3 * time.Second)
+	time.Sleep(3 * time.Second) // empirical
+	log.Printf("Ready.")
 }
 
 func (Q *QEmu) start() {
@@ -85,13 +86,15 @@ func (Q *QEmu) start() {
 		fmt.Printf("err: %s", Q.stderr.String())
 		log.Fatalf("Cannot connect to QEMU: %s", err)
 	}
-	log.Printf("Connected to monitor.")
 	Q.mon.Write([]byte{0x01, 0x63}) // send "ctrl+a c"
+
+	Q.waitMonitorPrompt(true) // first wait
+	log.Printf("Connected to monitor.")
 }
 
 var buf = make([]byte, 1000)
 
-func (Q *QEmu) waitMonitorPrompt() {
+func (Q *QEmu) waitMonitorPrompt(first bool) {
 	Q.mon.SetDeadline(time.Now().Add(10 * time.Second))
 	var response string
 	for {
@@ -101,17 +104,15 @@ func (Q *QEmu) waitMonitorPrompt() {
 			break
 		}
 	}
-	// log.Printf("Monitor response:\n%s", response)
+	if response != "(qemu) " && !first {
+		fmt.Printf("%s", response[:len(response)-7])
+	}
 }
 
 func (Q *QEmu) Monitor(cmd string) {
-	if Q.numcommands == 0 {
-		Q.waitMonitorPrompt()
-	}
-	Q.numcommands++
 	log.Printf("Monitor: '%s'", cmd)
 	Q.mon.Write([]byte(cmd + "\n")) // emit command
-	Q.waitMonitorPrompt()
+	Q.waitMonitorPrompt(false)
 }
 
 func (Q *QEmu) Shell(cmd string) {
