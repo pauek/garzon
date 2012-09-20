@@ -116,18 +116,22 @@ func (Q *QEmu) Monitor(cmd string) {
 }
 
 func (Q *QEmu) Shell(cmd string) {
-	Q.shell(cmd, false)
+	Q.shell(cmd, false, 300 * time.Millisecond)
 }
 
 func (Q *QEmu) ShellLog(cmd string) {
-	Q.shell(cmd, true)
+	Q.shell(cmd, true, 300 * time.Millisecond)
 }
 
-func (Q *QEmu) shell(cmd string, showOutput bool) {
+func (Q *QEmu) ShellWait(cmd string, dur time.Duration) {
+	Q.shell(cmd, true, dur)
+}
+
+func (Q *QEmu) shell(cmd string, showOutput bool, dur time.Duration) {
 	Q.stdin.Write([]byte(cmd + "\n"))
 	log.Printf("shell: '%s'", cmd)
 	Q.stdout.Reset()
-	time.Sleep(300 * time.Millisecond) // wait a bit (hack...)
+	time.Sleep(dur) // wait a bit (hack...)
 	out := Q.stdout.String()
 	n := strings.Index(out, "\n")
 	if showOutput {

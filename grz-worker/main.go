@@ -1,14 +1,13 @@
 package main
 
 import (
-	"crypto/sha1"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 )
 
 var (
@@ -25,7 +24,7 @@ func CreateTempDir() {
 				log.Printf("Cannot create '%s': %s", tempdir, err)
 				break
 			}
-			for _, subdir := range []string{"current", "judges"} {
+			for _, subdir := range []string{"current"} {
 				dir := filepath.Join(tempdir, subdir)
 				if err := os.Mkdir(dir, 0700); err != nil {
 					log.Printf("Cannot create '%s': %s", dir, err)
@@ -54,7 +53,7 @@ func RemoveTempDir() {
 
 func LinkProblem(problemDir string) {
 	// link problem
-	prob := filepath.Join(Tmp("current"), "problem")
+	prob := Tmp("current/problem")
 	if _, err := os.Stat(prob); err == nil {
 		err := os.Remove(prob)
 		if err != nil {
@@ -66,37 +65,19 @@ func LinkProblem(problemDir string) {
 	}
 }
 
-func AddSolution(solution []byte) {
-	
-}
-
-func Compile(infile string, outfile string) error {
-	build := exec.Command("go", "build", "-o", outfile, infile)
-	if output, err := build.CombinedOutput(); err != nil {
-		return fmt.Errorf("Cannot compile '%s': %s\n%s", infile, err, output)
-	}
-	return nil
-}
-
-func Sha1(filename string) string {
-	sha1 := sha1.New()
-	file, err := os.Open(filename)
+func AddSolution(solution []byte) error {
+	f, err := os.Create(Tmp("current/solution"))
 	if err != nil {
-		return ""
+		return fmt.Errorf("Cannot save solution: %s", err)
 	}
-	io.Copy(sha1, file)
-	file.Close()
-	return fmt.Sprintf("%x", sha1.Sum(nil))
+	f.Write(solution)
+	f.Close()
+	return nil
 }
 
 func LinkJudge(problemDir string) {
 	judgesrc := filepath.Join(problemDir, "judge.go")
-	if _, err := os.Stat(judgesrc); err != nil {
-		log.Printf("Cannot find '%s': %s", judgesrc, err)
-	}
-	judgebin := Tmp("judges/" + Sha1(judgesrc))
-	Compile(judgesrc, judgebin)
-	if err := os.Symlink(judgebin, Tmp("current/judge")); err != nil {
+	if err := os.Symlink(judgesrc, Tmp("current/judge.go")); err != nil {
 		log.Printf("Cannot create symlink: %s", err)
 	}
 }
@@ -105,10 +86,10 @@ func CreateISO() {
 	// gen iso image
 	geniso := exec.Command("genisoimage",
 		"-f",                // follow symlinks
-		"-file-mode", "400", // read-only for tc
-		"-uid", "5000", // garzon user = 5000 (tc = 1001)
+   // "-file-mode", "400", // read-only for tc
+	   "-uid", "5000", // garzon user = 5000 (tc = 1001)
 		"-o", filepath.Join(tempdir, "iso"),
-			Tmp("current"))
+		Tmp("current"))
 
 	output, err := geniso.CombinedOutput()
 	if err != nil {
@@ -124,23 +105,20 @@ func RemoveISO() {
 	}
 }
 
-func Eval(problemDir string) {
+
+func Eval(problemDir string, solution []byte) error {
 	LinkProblem(problemDir)
 	LinkJudge(problemDir)
+	if err := AddSolution(solution); err != nil {
+		return err
+	}
 	CreateISO()
 	qemu.Monitor("change ide1-cd0 " + filepath.Join(tempdir, "iso")) // insert CD-ROM in the VM
-	qemu.Shell("mount /dev/cdrom /mnt/cdrom")
-	qemu.Shell("su garzon")
-	qemu.Shell("cd /mnt/cdrom/problem")
-
-	// Ejecutar el judge...
-	qemu.ShellLog("ls -la ..")
-
-	qemu.Shell("exit")
-	qemu.Shell("umount /mnt/cdrom")
+	qemu.ShellWait("/mnt/vda/garzon.sh", 10 * time.Second) // execute judge
 	qemu.Monitor("eject ide1-cd0")
 	RemoveISO()
 	qemu.Restore()
+	return nil
 }
 
 var (
@@ -150,7 +128,7 @@ var (
 )
 
 func main() {
-	flag.StringVar(&image, "image", "gcc.qcow2", "Specify image file to use")
+	flag.StringVar(&image, "image", "garzon.qcow2", "Specify image file to use")
 	flag.BoolVar(&prepare, "prepare", false, "Only create the snapshot")
 	flag.Parse()
 
@@ -171,7 +149,9 @@ func main() {
 		"/pub/Academio/Problems/Test/42",
 	}
 	for _, p := range probs {
-		Eval(p)
+		if err := Eval(p, []byte("43")); err != nil {
+			fmt.Printf("Eval error: %s", err)
+		}
 	}
 	qemu.Quit()
 }
