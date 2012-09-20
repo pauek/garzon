@@ -89,6 +89,29 @@ function _image_init() {
     sudo touch tce/bootlocal.sh # this is called from /opt/bootlocal.sh
     _download_packages mirrors kmaps
     _onboot mirrors.tcz kmaps.tcz
+    sudo sh -c "cat > garzon.sh" <<EOF
+#!/bin/sh
+
+# Mount CD-ROM (read-only problem)
+mount /dev/cdrom /mnt/cdrom
+
+# Compile judge
+hash=\$(sha1sum /mnt/cdrom/judge.go | cut -d' ' -f1)
+mkdir -p /mnt/vda/judges
+if ! [ -f /mnt/vda/judges/\$hash ]; then
+   /mnt/vda/src/go/bin/go build -o /mnt/vda/judges/\$hash /mnt/cdrom/judge.go 
+fi
+
+# Launch judge
+su garzon -c "
+cd /mnt/cdrom/problem; 
+/mnt/vda/judges/\$hash < ../solution"
+
+# Umount CD-ROM
+umount /mnt/cdrom
+
+EOF
+    sudo sh -c "chmod +x garzon.sh"
 }
 
 # init 
@@ -300,7 +323,7 @@ function convert() {
         exit 1
     fi
     if [ -f $outfile ]; then
-        echo "File '"${outfile}"' exists, overwrite (y/n)? "
+        echo -n "File '"${outfile}"' exists, overwrite (y/n)? "
         read resp
         if [ $resp == "y" ]; then
             rm $outfile
