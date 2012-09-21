@@ -19,21 +19,26 @@ function _download() {
     done
 }
 
+function _cached_download() {
+    pkg=$1
+    if ! [ -f ${pkg} ]; then
+        # porqué no puedo poner 'curl' aquí !?!?
+        sudo wget -q ${mirror}${tcz_dir}${pkg}
+    else
+        echo -n " [hit]"
+    fi
+}
+
 function _download_packages() {
-    pushd tce/optional
+    _silent pushd tce/optional
     for file in $*; do
-        if ! [ -f ${file}.tcz ]; then
-            sudo wget ${mirror}${tcz_dir}${file}.tcz
-        else
-            echo "-> hit: ${file}.tcz"
-        fi
-        if ! [ -f ${file}.tcz.dep ]; then
-            sudo wget ${mirror}${tcz_dir}${file}.tcz.dep
-        else
-            echo "-> hit: ${file}.tcz.dep"
-        fi
+        for ext in .tcz .tcz.dep; do
+            echo -n ${file}${ext}
+            _cached_download ${file}${ext}
+            echo
+        done
     done
-    popd
+    _silent popd
 }
 
 function _silent() {
@@ -63,11 +68,11 @@ function _image_mount() {
     mkdir __image__
     sync
     sudo mount -o loop ${imgfile} __image__
-    pushd __image__
+    _silent pushd __image__
 }
 
 function _image_umount() {
-    popd
+    _silent popd
     sync
     sudo umount __image__
     rmdir __image__
