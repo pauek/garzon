@@ -11,27 +11,35 @@ function _download() {
             read resp
             if [ $resp == "y" ]; then
                 rm -f $file
-                wget ${mirror}${dist_dir}${file}
+                curl -s ${mirror}${dist_dir}${file}
             fi
         else 
-            wget ${mirror}${dist_dir}${file}
+            curl -s ${mirror}${dist_dir}${file}
         fi
     done
+}
+
+function _cached_download() {
+    mkdir -p $HOME/.grz/cache
+    file=$1
+    cachedfile=$HOME/.grz/cache/$file
+    if ! [ -f $cachedfile ]; then
+        url=${mirror}${tcz_dir}${file}.tcz
+        curl -s -o $cachedfile $url
+    else 
+        echo -n " [hit]"
+    fi
+    [ -f $cachedfile ] && sudo cp $cachedfile .
 }
 
 function _download_packages() {
     pushd tce/optional
     for file in $*; do
-        if ! [ -f ${file}.tcz ]; then
-            sudo wget ${mirror}${tcz_dir}${file}.tcz
-        else
-            echo "-> hit: ${file}.tcz"
-        fi
-        if ! [ -f ${file}.tcz.dep ]; then
-            sudo wget ${mirror}${tcz_dir}${file}.tcz.dep
-        else
-            echo "-> hit: ${file}.tcz.dep"
-        fi
+        for ext in .tcz .tcz.dep; do
+            echo -n ${file}${ext}
+            _cached_download ${file}${ext}
+            echo
+        done
     done
     popd
 }
@@ -280,7 +288,7 @@ function _install_go() {
     # Decompress source
     sudo mkdir src
     pushd src
-    sudo wget http://go.googlecode.com/files/go1.0.2.src.tar.gz
+    sudo curl http://go.googlecode.com/files/go1.0.2.src.tar.gz
     sudo tar xzvf go1.0.2.src.tar.gz
     popd
 
@@ -379,6 +387,10 @@ function launch() {
         $*
 }
 
+function pkgclean() {
+    rm -rf $HOME/.grz/cache
+}
+
 function help() {    
     cat <<EOF
 usage: grz-vm <command> [arguments]
@@ -390,6 +402,7 @@ command:
     remaster <core.gz> <initrd.gz>
     createimg <file.img>
     pkglist
+    pkgclean
     install <file.img> packages...
     convert <infile.img> <outfile.img>
     launch <file.img> [-nographic]
