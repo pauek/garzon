@@ -113,7 +113,7 @@ func Eval(problemDir string, solution []byte) error {
 	}
 	CreateISO()
 	qemu.Monitor("change ide1-cd0 " + filepath.Join(tempdir, "iso")) // insert CD-ROM in the VM
-	qemu.Shell("/mnt/vda/garzon.sh") // execute judge
+	qemu.ShellLog("/mnt/vda/garzon.sh") // execute judge
 	qemu.Monitor("eject ide1-cd0")
 	RemoveISO()
 	qemu.Restore()
