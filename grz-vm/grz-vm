@@ -120,6 +120,7 @@ function download() {
     _download core.gz vmlinuz
 }
 
+# unpack <core.gz> <directory>
 function unpack() {
     file=$1
     dir=$2
@@ -147,12 +148,34 @@ function unpack() {
     _silent popd
 }
 
+# repack <directory> <initrd.gz> 
+function repack() {   
+    dir=$1
+    file=$2
+    if ! [ -d $dir ]; then
+        echo "error: dir '"${dir}"' does not exist"
+        exit 1
+    fi
+    if [ -f $file ]; then
+        echo -n "Erase existing file '"${file}"' (y/n): "
+        read resp
+        if [ $resp == "y" ]; then
+            sudo rm -rf ${file}
+        else
+            exit 0
+        fi
+    fi
+    _silent pushd ${dir}
+    sudo find | sudo cpio -o -H newc | gzip -2 > ../${file}
+    _silent popd
+    sudo rm -rf ${dir}
+}
+
 # remaster <core.gz> <initrd.gz>
 function remaster() {
 # Check arguments
     core=$1
     initrd=$2
-
     if [ -z $core ]; then
         echo "error: no 'core.gz' specified"
         return 1
@@ -161,17 +184,15 @@ function remaster() {
         echo "error: no 'initrd.gz' specified"
         return 1
     fi
-
     if ! [ -f $core ]; then
         echo "'"$core"' does not exist"
         return 1
     fi
 
-# Unpack
-    unpack $core initrd
+    unpack $core __initrd__
 
 # Introduce modifications 
-    _silent pushd initrd
+    _silent pushd __initrd__
 
     # create mountpoint for iso
     sudo mkdir -p mnt/cdrom
@@ -182,7 +203,7 @@ function remaster() {
     # enable root terminal on serial port
     sudo sh -c "cat >> etc/inittab" <<EOF
 # garzon
-ttyS0::once:/bin/sh
+ttyS0::once:/bin/sh -c "PS1=$(echo garzon | sha1sum | cut -d' ' -f1) sh"
 EOF
 
     # permit execution of script from 'vda' partition
@@ -201,12 +222,11 @@ EOF
     sudo mkdir -p home/garzon
     sudo chown 5000:5000 home/garzon
     sudo chmod 700 home/garzon
-   
-# Repack
-    sudo find | sudo cpio -o -H newc | gzip -2 > ../$initrd
     _silent popd
-    sudo rm -rf initrd
+
+    repack __initrd__ $initrd
 }
+
 
 # createimg <file.img>
 function createimg() {
@@ -221,7 +241,7 @@ function createimg() {
         exit 1
     fi
     if [ -f $file ]; then
-        echo -n "File '"$file"' exists, overwrite (y/n)? "
+        echo -n "File '"${file}"' exists, overwrite (y/n)? "
         read resp
         if [ $resp == "y" ]; then
             rm -f $file
@@ -229,9 +249,9 @@ function createimg() {
             exit 0
         fi
     fi
-    dd if=/dev/zero of=${file} bs=1M count=$sz
-    sudo mkfs.ext3 -F ${file}
-    _image_mount ${file}
+    dd if=/dev/zero of=$file bs=1M count=$sz
+    sudo mkfs.ext3 -F $file
+    _image_mount $file
     _image_init
     _image_umount
 }
@@ -351,7 +371,7 @@ function launch() {
         echo "File 'initrd.gz' not found"
         exit 1
     fi
-    
+
     kvm -kernel vmlinuz -initrd initrd.gz \
         -append "tce=vda kmap=qwerty/es vga=788 nodhcp" \
         -drive "file=$imgname,if=virtio" \
@@ -366,6 +386,7 @@ usage: grz-vm <command> [arguments]
 command:
     download
     unpack <initrd.gz> <dir>
+    repack <initrd.gz> <dir>
     remaster <core.gz> <initrd.gz>
     createimg <file.img>
     pkglist
