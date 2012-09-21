@@ -1,12 +1,11 @@
 package main
 
 import (
-	"bytes"
+	"crypto/sha1"
 	"flag"
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"os"
 	"os/exec"
 	"strings"
@@ -14,15 +13,22 @@ import (
 )
 
 type QEmu struct {
-	Image     string
-	cmd       *exec.Cmd
-	stdin     io.WriteCloser
-	stdout    bytes.Buffer
-	stderr    bytes.Buffer
-	mon       net.Conn
+	Image  string
+	cmd    *exec.Cmd
+	stdin  io.WriteCloser
+	stdout io.ReadCloser
 }
 
 var graphic = flag.Bool("graphic", false, "Show QEmu graphic mode")
+
+var magicPrompt string
+
+func init() {
+	h := sha1.New()
+	fmt.Fprintf(h, "garzon\n")
+	magicPrompt = fmt.Sprintf("%x", h.Sum(nil))
+	log.Printf("MagicPrompt: '%s'\n", magicPrompt)
+}
 
 func (Q *QEmu) args(addargs ...string) (args []string) {
 	root := os.Getenv("GARZON_VMS")
@@ -31,14 +37,10 @@ func (Q *QEmu) args(addargs ...string) (args []string) {
 		"-initrd", root + "/initrd.gz",
 		"-drive", "file=" + root + "/" + Q.Image + ",if=virtio",
 		"-append", `"tce=vda kmap=qwerty/es vga=788 nodhcp"`,
-		"-serial", "stdio",
-		"-serial", "mon:unix:monitor,server", // QEMU will wait...
 		"-net", "none",
+		"-nographic",     // implies "-serial stdio -monitor stdio"
 	}
 	args = append(args, addargs...)
-	if !*graphic {
-		args = append(args, "-nographic")
-	}
 	return
 }
 
@@ -47,80 +49,89 @@ func NewVM(image string) *QEmu {
 }
 
 func (Q *QEmu) Start() {
+	log.Printf("Starting QEMU...")
 	Q.cmd = exec.Command("kvm", Q.args()...)
 	Q.start()
-	time.Sleep(10 * time.Second) // wait until VM is up
-	log.Printf("Ready.")
+	Q.waitForPrompt(magicPrompt)
+	log.Printf("... ready!")
 }
 
 func (Q *QEmu) LoadVM() {
+	log.Printf("Starting QEMU...")
 	Q.cmd = exec.Command("kvm", Q.args("-loadvm", "1")...)
 	Q.start()
-	time.Sleep(3 * time.Second) // empirical
-	log.Printf("Ready.")
+	Q.emit("") // force new prompt
+	Q.waitForPrompt(magicPrompt)
+	log.Printf("... ready!")
 }
 
 func (Q *QEmu) start() {
 	var err error
 
-	log.Printf("Starting QEMU.")
-
-	// Wire std{in,out,err}
+	// Wire std{in,out}
 	Q.stdin, err = Q.cmd.StdinPipe()
 	if err != nil {
 		log.Fatalf("Cannot connect to QEmu's stdin: %s", err)
 	}
-	Q.cmd.Stdout = &Q.stdout
-	Q.cmd.Stderr = &Q.stderr
+	Q.stdout, err = Q.cmd.StdoutPipe()
+	if err != nil {
+		log.Fatalf("Cannot connect to QEmu's stdout: %s", err)
+	}
 
 	// Launch QEmu
 	err = Q.cmd.Start()
 	if err != nil {
 		log.Fatalf("Error executing QEMU: %s", err)
 	}
-	time.Sleep(500 * time.Millisecond) // IMPORTANT: wait before connecting
-
-	// Connect to monitor
-	Q.mon, err = net.Dial("unix", "monitor")
-	if err != nil {
-		fmt.Printf("err: %s", Q.stderr.String())
-		log.Fatalf("Cannot connect to QEMU: %s", err)
-	}
-	Q.mon.Write([]byte{0x01, 0x63}) // send "ctrl+a c"
-
-	Q.waitMonitorPrompt(true) // first wait
-	log.Printf("Connected to monitor.")
 }
 
-var buf = make([]byte, 1000)
+var buf = make([]byte, 10000)
 
-func (Q *QEmu) waitMonitorPrompt(first bool) {
-	Q.mon.SetDeadline(time.Now().Add(10 * time.Second))
-	var response string
+func (Q *QEmu) waitForPrompt(prompt string) (output string) {
 	for {
-		n, _ := Q.mon.Read(buf)
-		response += string(buf[:n])
-		if strings.HasSuffix(response, "(qemu) ") {
+		n, err := Q.stdout.Read(buf)
+		if err != io.EOF && err != nil {
+			log.Printf("Monitor: read error: %s", err)
+			break
+		}
+		output += string(buf[:n])
+		if strings.HasSuffix(output, prompt) {
 			break
 		}
 	}
-	if response != "(qemu) " && !first {
-		fmt.Printf("%s", response[:len(response)-7])
-	}
+	output = output[:len(output)-len(prompt)]
+	return
+}
+
+func (Q *QEmu) emitCtrlA_C() {
+	Q.stdin.Write([]byte{0x01, 0x63}) // emit "ctrl+a c"
+}
+
+func (Q *QEmu) emit(cmd string) {
+	fmt.Fprintf(Q.stdin, "%s\n", cmd)
 }
 
 func (Q *QEmu) Monitor(cmd string) {
+	// Activate monitor
+	Q.emitCtrlA_C()
+	Q.waitForPrompt("(qemu) ")
+
+	// Execute command
 	log.Printf("Monitor: '%s'", cmd)
-	Q.mon.Write([]byte(cmd + "\n")) // emit command
-	Q.waitMonitorPrompt(false)
+	Q.emit(cmd)
+	Q.waitForPrompt("(qemu) ")
+
+	// Activate console
+	Q.emitCtrlA_C()
+	Q.waitForPrompt("\n") // eat up '\n' produced by QEmu
 }
 
 func (Q *QEmu) Shell(cmd string) {
-	Q.shell(cmd, false, 300 * time.Millisecond)
+	Q.shell(cmd, false, 300*time.Millisecond)
 }
 
 func (Q *QEmu) ShellLog(cmd string) {
-	Q.shell(cmd, true, 300 * time.Millisecond)
+	Q.shell(cmd, true, 300*time.Millisecond)
 }
 
 func (Q *QEmu) ShellWait(cmd string, dur time.Duration) {
@@ -128,33 +139,24 @@ func (Q *QEmu) ShellWait(cmd string, dur time.Duration) {
 }
 
 func (Q *QEmu) shell(cmd string, showOutput bool, dur time.Duration) {
-	Q.stdin.Write([]byte(cmd + "\n"))
 	log.Printf("shell: '%s'", cmd)
-	Q.stdout.Reset()
-	time.Sleep(dur) // wait a bit (hack...)
-	out := Q.stdout.String()
-	n := strings.Index(out, "\n")
+	Q.emit(cmd)
+	output := Q.waitForPrompt(magicPrompt)
 	if showOutput {
-		log.Printf("Output:\n%s", out[n+1:])
+		log.Printf("Output:\n%s", output[len(cmd)+2:])
 	}
 }
 
 func (Q *QEmu) Quit() {
 	log.Printf("Ending QEMU")
 
-	Q.mon.Write([]byte("quit\n")) // don't wait
-	Q.mon.Close()
-
-	// Erase file 'monitor'
-	err := os.Remove("monitor")
-	if err != nil {
-		log.Printf("Cannot remove 'monitor': %s", err)
-	}
+	Q.emitCtrlA_C()
+	Q.waitForPrompt("(qemu) ")
+	Q.emit("quit")
 
 	log.Printf("Waiting for QEMU to finish...")
-	err = Q.cmd.Wait()
+	err := Q.cmd.Wait()
 	if err != nil {
-		fmt.Printf("err: %s", Q.stderr.String())
 		log.Fatalf("Wait: %s", err)
 	}
 	log.Printf("... bye!")

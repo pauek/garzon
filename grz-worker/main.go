@@ -132,9 +132,6 @@ func main() {
 	flag.BoolVar(&prepare, "prepare", false, "Only create the snapshot")
 	flag.Parse()
 
-	CreateTempDir()
-	defer RemoveTempDir()
-
 	qemu = NewVM(image)
 
 	if prepare {
@@ -144,12 +141,15 @@ func main() {
 		return
 	}
 
+	CreateTempDir()
+	defer RemoveTempDir()
+
 	qemu.LoadVM()
 	probs := []string{
 		"/pub/Academio/Problems/Test/42",
 	}
 	for _, p := range probs {
-		if err := Eval(p, []byte("43")); err != nil {
+		if err := Eval(p, []byte("42")); err != nil {
 			fmt.Printf("Eval error: %s", err)
 		}
 	}
