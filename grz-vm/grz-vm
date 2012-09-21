@@ -19,13 +19,23 @@ function _download() {
     done
 }
 
+mkdir -p $HOME/.grz/cache
+
 function _cached_download() {
     pkg=$1
     if ! [ -f ${pkg} ]; then
-        # porqué no puedo poner 'curl' aquí !?!?
-        sudo wget -q ${mirror}${tcz_dir}${pkg}
+        if [ -f $HOME/.grz/cache/${pkg} ]; then 
+            echo -n " [from cache]"
+            sudo cp $HOME/.grz/cache/${pkg} ${pkg}
+        else
+            # porqué no puedo poner 'curl' aquí !?!?
+            sudo wget -q ${mirror}${tcz_dir}${pkg}
+            if [ -f ${pkg} ]; then
+                cp ${pkg} $HOME/.grz/cache/${pkg}
+            fi
+        fi
     else
-        echo -n " [hit]"
+        echo -n " [already installed]"
     fi
 }
 
