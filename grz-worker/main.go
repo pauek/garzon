@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"time"
 )
 
 var (
@@ -114,7 +113,7 @@ func Eval(problemDir string, solution []byte) error {
 	}
 	CreateISO()
 	qemu.Monitor("change ide1-cd0 " + filepath.Join(tempdir, "iso")) // insert CD-ROM in the VM
-	qemu.ShellWait("/mnt/vda/garzon.sh", 10 * time.Second) // execute judge
+	qemu.Shell("/mnt/vda/garzon.sh") // execute judge
 	qemu.Monitor("eject ide1-cd0")
 	RemoveISO()
 	qemu.Restore()
