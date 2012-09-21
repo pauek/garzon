@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"time"
 )
 
 type QEmu struct {
@@ -127,18 +126,14 @@ func (Q *QEmu) Monitor(cmd string) {
 }
 
 func (Q *QEmu) Shell(cmd string) {
-	Q.shell(cmd, false, 300*time.Millisecond)
+	Q.shell(cmd, false)
 }
 
 func (Q *QEmu) ShellLog(cmd string) {
-	Q.shell(cmd, true, 300*time.Millisecond)
+	Q.shell(cmd, true)
 }
 
-func (Q *QEmu) ShellWait(cmd string, dur time.Duration) {
-	Q.shell(cmd, true, dur)
-}
-
-func (Q *QEmu) shell(cmd string, showOutput bool, dur time.Duration) {
+func (Q *QEmu) shell(cmd string, showOutput bool) {
 	log.Printf("shell: '%s'", cmd)
 	Q.emit(cmd)
 	output := Q.waitForPrompt(magicPrompt)
