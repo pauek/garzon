@@ -55,6 +55,13 @@ function _silent() {
     $* &> /dev/null;
 }
 
+function _report() {
+    echo -n $1
+    shift
+    _silent $*
+    echo
+}
+
 function _purge() {
     pushd tce/optional
     for file in $*; do
@@ -264,8 +271,9 @@ function createimg() {
             exit 0
         fi
     fi
-    dd if=/dev/zero of=$file bs=1M count=$sz
-    sudo mkfs.ext3 -F $file
+    _report "Creating image... "  dd if=/dev/zero of=$file bs=1M count=$sz
+    _report "Formatting image... " sudo mkfs.ext3 -F $file
+    echo "Installing base packages: "
     _image_mount $file
     _image_init
     _image_umount
@@ -276,6 +284,10 @@ function pkglist() {
 gcc
 go
 EOF
+}
+
+function pkgclean() {
+    rm -rf $HOME/.grz/cache/*
 }
 
 ## Installation scripts ####################################################
@@ -322,6 +334,7 @@ EOF
             -append "tce=vda kmap=qwerty/es vga=788 nodhcp" \
             -drive file=${imgfile},if=virtio \
             -serial stdio \
+            -nographic
             -m 512M
 
     # Set environment + erase unneeded packages
@@ -405,6 +418,7 @@ command:
     remaster <core.gz> <initrd.gz>
     createimg <file.img>
     pkglist
+    pkgclean
     install <file.img> packages...
     convert <infile.img> <outfile.img>
     launch <file.img> [-nographic]
