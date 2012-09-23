@@ -63,11 +63,11 @@ function _report() {
 }
 
 function _purge() {
-    pushd tce/optional
+    _silent pushd tce/optional
     for file in $*; do
         sudo rm -f ${file}.tcz{,.dep}
     done
-    popd
+    _silent popd
 }
 
 function _onboot() {
@@ -306,10 +306,12 @@ function _install_go() {
 
     # Decompress source
     sudo mkdir src
-    pushd src
-    sudo wget http://go.googlecode.com/files/go1.0.2.src.tar.gz
-    sudo tar xzvf go1.0.2.src.tar.gz
-    popd
+    _silent pushd src
+    if ! [ -f go1.0.2.src.tar.gz ]; then
+        _report "Downloading Go source... " sudo wget http://go.googlecode.com/files/go1.0.2.src.tar.gz
+    fi
+    _report "Decompressing Go source... " sudo tar xzvf go1.0.2.src.tar.gz
+    _silent popd
 
     # Install bash + gcc (+ linux headers)
     _download_packages bash ncurses ncurses-common \
@@ -319,7 +321,8 @@ function _install_go() {
     _image_umount
 
     # Compile Go inside the VM
-    (sleep 10; cat <<EOF
+    (cat <<EOF
+PS1=""
 su tc -c "tce-load -i bash"
 su tc -c "tce-load -i gcc"
 su tc -c "tce-load -i eglibc_base-dev.tcz"
@@ -333,8 +336,7 @@ EOF
             -initrd initrd.gz \
             -append "tce=vda kmap=qwerty/es vga=788 nodhcp" \
             -drive file=${imgfile},if=virtio \
-            -serial stdio \
-            -nographic
+            -nographic \
             -m 512M
 
     # Set environment + erase unneeded packages
