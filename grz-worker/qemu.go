@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -44,6 +45,11 @@ func (Q *QEmu) args(addargs ...string) (args []string) {
 }
 
 func NewVM(image string) *QEmu {
+	root := os.Getenv("GARZON_VMS")
+	_, err := os.Stat(filepath.Join(root, image))
+	if err != nil {
+		log.Fatalf("Cannot find image '%s'", image)
+	}
 	return &QEmu{Image: image}
 }
 

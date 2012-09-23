@@ -106,6 +106,13 @@ func RemoveISO() {
 
 
 func Eval(problemDir string, solution []byte) error {
+	if info, err := os.Stat(problemDir); err == nil {
+		if !info.IsDir() {
+			return fmt.Errorf("'%s' is not a directory", problemDir)
+		}
+	} else {
+		return fmt.Errorf("'%s' does not exist", problemDir)
+	}
 	LinkProblem(problemDir)
 	LinkJudge(problemDir)
 	if err := AddSolution(solution); err != nil {
@@ -144,12 +151,13 @@ func main() {
 	defer RemoveTempDir()
 
 	qemu.LoadVM()
-	probs := []string{
-		"/pub/Academio/Problems/Test/42",
-	}
-	for _, p := range probs {
-		if err := Eval(p, []byte("42")); err != nil {
-			fmt.Printf("Eval error: %s", err)
+	for _, p := range flag.Args() {
+		if absp, err := filepath.Abs(p); err == nil {
+			if err := Eval(absp, []byte("42")); err != nil {
+				log.Printf("Eval error: %s", err)
+			}
+		} else {
+			log.Printf("Error with path '%s'", absp)
 		}
 	}
 	qemu.Quit()
