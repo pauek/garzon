@@ -54,24 +54,19 @@ func NewVM(image string) *QEmu {
 }
 
 func (Q *QEmu) Start() {
-	log.Printf("Starting QEMU...")
 	Q.cmd = exec.Command("kvm", Q.args()...)
-	Q.start()
-	Q.waitForPrompt(magicPrompt, nil)
-	log.Printf("... ready!")
+	Q.start(false)
 }
 
 func (Q *QEmu) LoadVM() {
-	log.Printf("Starting QEMU...")
 	Q.cmd = exec.Command("kvm", Q.args("-loadvm", "1")...)
-	Q.start()
-	Q.emit("") // force new prompt
-	Q.waitForPrompt(magicPrompt, nil)
-	log.Printf("... ready!")
+	Q.start(true)
 }
 
-func (Q *QEmu) start() {
+func (Q *QEmu) start(forceNewPrompt bool) {
 	var err error
+
+	log.Printf("Starting QEMU...")
 
 	// Wire std{in,out}
 	Q.stdin, err = Q.cmd.StdinPipe()
@@ -88,6 +83,14 @@ func (Q *QEmu) start() {
 	if err != nil {
 		log.Fatalf("Error executing QEMU: %s", err)
 	}
+
+	if forceNewPrompt {
+		Q.emit("")
+	}
+	Q.waitForPrompt(magicPrompt, nil)
+	Q.shell("stty -echo", false) // suppress echo
+
+	log.Printf("... ready!")
 }
 
 var buf = make([]byte, 10000)

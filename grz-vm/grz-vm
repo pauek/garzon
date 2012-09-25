@@ -118,16 +118,22 @@ function _image_init() {
 mount /dev/cdrom /mnt/cdrom
 
 # Compile judge
-hash=\$(sha1sum /mnt/cdrom/judge.go | cut -d' ' -f1)
+jhash=\$(sha1sum /mnt/cdrom/judge.go | cut -d' ' -f1)
 mkdir -p /mnt/vda/judges
-if ! [ -f /mnt/vda/judges/\$hash ]; then
-   /mnt/vda/src/go/bin/go build -o /mnt/vda/judges/\$hash /mnt/cdrom/judge.go 
+if ! [ -f /mnt/vda/judges/\$jhash ]; then
+   /mnt/vda/src/go/bin/go build -o /mnt/vda/judges/\$jhash /mnt/cdrom/judge.go 
 fi
 
 # Launch judge
+shash=\$(sha1sum /mnt/cdrom/solution | cut -d' ' -f1)
 su garzon -c "
 cd /mnt/cdrom/problem; 
-/mnt/vda/judges/\$hash < ../solution"
+echo \$shash;
+/mnt/vda/judges/\$jhash < ../solution > /tmp/\$shash;
+echo \$shash;
+cat /tmp/\$shash;
+rm -f /tmp/\$shash;
+"
 
 # Umount CD-ROM
 umount /mnt/cdrom
@@ -307,8 +313,8 @@ function _install_go() {
     # Decompress source
     sudo mkdir src
     _silent pushd src
-    if ! [ -f go1.0.2.src.tar.gz ]; then
-        _report "Downloading Go source... " sudo wget http://go.googlecode.com/files/go1.0.2.src.tar.gz
+    if ! [ -f go1.0.3.src.tar.gz ]; then
+        _report "Downloading Go source... " sudo wget http://go.googlecode.com/files/go1.0.3.src.tar.gz
     fi
     _report "Decompressing Go source... " sudo tar xzvf go1.0.2.src.tar.gz
     _silent popd
@@ -322,7 +328,7 @@ function _install_go() {
 
     # Compile Go inside the VM
     (cat <<EOF
-PS1=""
+PS1=''
 su tc -c "tce-load -i bash"
 su tc -c "tce-load -i gcc"
 su tc -c "tce-load -i eglibc_base-dev.tcz"
