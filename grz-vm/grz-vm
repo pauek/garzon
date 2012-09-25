@@ -231,7 +231,7 @@ function remaster() {
     # enable root terminal on serial port
     sudo sh -c "cat >> etc/inittab" <<EOF
 # garzon
-ttyS0::once:/bin/sh -c "PS1=$(echo garzon | sha1sum | cut -d' ' -f1) sh"
+ttyS0::once:/bin/sh -c "PS1=\$(cat /proc/cmdline | xargs -n1 | grep grz | cut -d= -f2) sh"
 EOF
 
     # permit execution of script from 'vda' partition
@@ -313,10 +313,11 @@ function _install_go() {
     # Decompress source
     sudo mkdir src
     _silent pushd src
-    if ! [ -f go1.0.3.src.tar.gz ]; then
-        _report "Downloading Go source... " sudo wget http://go.googlecode.com/files/go1.0.3.src.tar.gz
+    gosrc=go1.0.3.src.tar.gz
+    if ! [ -f $gosrc ]; then
+        _report "Downloading Go source... " sudo wget http://go.googlecode.com/files/$gosrc
     fi
-    _report "Decompressing Go source... " sudo tar xzvf go1.0.2.src.tar.gz
+    _report "Decompressing Go source... " sudo tar xzvf $gosrc
     _silent popd
 
     # Install bash + gcc (+ linux headers)
@@ -409,7 +410,7 @@ function launch() {
     fi
 
     kvm -kernel vmlinuz -initrd initrd.gz \
-        -append "tce=vda kmap=qwerty/es vga=788 nodhcp" \
+        -append "tce=vda kmap=qwerty/es vga=788 nodhcp grz=[${imgname}]" \
         -drive "file=$imgname,if=virtio" \
         -net none \
         $*

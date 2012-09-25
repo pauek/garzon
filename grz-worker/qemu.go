@@ -17,6 +17,7 @@ type QEmu struct {
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser
 	stdout io.ReadCloser
+	fresh  bool
 }
 
 var graphic = flag.Bool("graphic", false, "Show QEmu graphic mode")
@@ -36,7 +37,7 @@ func (Q *QEmu) args(addargs ...string) (args []string) {
 		"-kernel", root + "/vmlinuz",
 		"-initrd", root + "/initrd.gz",
 		"-drive", "file=" + root + "/" + Q.Image + ",if=virtio",
-		"-append", `"tce=vda kmap=qwerty/es vga=788 nodhcp"`,
+		"-append", fmt.Sprintf(`tce=vda kmap=qwerty/es vga=788 nodhcp grz=%s`, magicPrompt),
 		"-net", "none",
 		"-nographic",     // implies "-serial stdio -monitor stdio"
 	}
@@ -88,9 +89,10 @@ func (Q *QEmu) start(forceNewPrompt bool) {
 		Q.emit("")
 	}
 	Q.waitForPrompt(magicPrompt, nil)
-	Q.shell("stty -echo", false) // suppress echo
+	Q.shell("stty -echo", nil) // suppress echo
 
 	log.Printf("... ready!")
+	Q.fresh = true
 }
 
 var buf = make([]byte, 10000)
@@ -120,14 +122,18 @@ func (Q *QEmu) waitForPrompt(prompt string, report func(string)) (output string)
 }
 
 func (Q *QEmu) emitCtrlA_C() {
+	Q.fresh = false
 	Q.stdin.Write([]byte{0x01, 0x63}) // emit "ctrl+a c"
 }
 
 func (Q *QEmu) emit(cmd string) {
+	Q.fresh = false
 	fmt.Fprintf(Q.stdin, "%s\n", cmd)
 }
 
 func (Q *QEmu) Monitor(cmd string) {
+	Q.fresh = false
+
 	// Activate monitor
 	Q.emitCtrlA_C()
 	Q.waitForPrompt("(qemu) ", nil)
@@ -142,25 +148,19 @@ func (Q *QEmu) Monitor(cmd string) {
 	Q.waitForPrompt("\n", nil) // eat up '\n' produced by QEmu
 }
 
-func (Q *QEmu) Shell(cmd string) {
-	Q.shell(cmd, false)
+func (Q *QEmu) Shell(cmd string) string {
+	return Q.shell(cmd, nil)
 }
 
-func (Q *QEmu) ShellLog(cmd string) {
-	Q.shell(cmd, true)
+func (Q *QEmu) ShellReport(cmd string, report func(string)) string {
+	return Q.shell(cmd, report)
 }
 
-func (Q *QEmu) shell(cmd string, showOutput bool) {
-	log.Printf("shell: '%s'", cmd)
+func (Q *QEmu) shell(cmd string, report func(string)) (output string) {
+	Q.fresh = false
 	Q.emit(cmd)
-	output := Q.waitForPrompt(magicPrompt, func(line string) {
-		if showOutput {
-			fmt.Printf("%s\n", line)
-		}
-	})
-	if showOutput && false {
-		log.Printf("Output:\n%s", output[len(cmd)+2:])
-	}
+	output = Q.waitForPrompt(magicPrompt, report)
+	return
 }
 
 func (Q *QEmu) Quit() {
@@ -183,6 +183,9 @@ func (Q *QEmu) Save() {
 	Q.Monitor("savevm") // no params -> assigns ID 1 (+ tag vm-XXXX)
 }
 
-func (Q *QEmu) Restore() {
-	Q.Monitor("loadvm 1")
+func (Q *QEmu) Reset() {
+	if !Q.fresh {
+		Q.Monitor("loadvm 1")
+		Q.fresh = true
+	}
 }

@@ -23,24 +23,26 @@ func CreateTempDir() {
 				log.Printf("Cannot create '%s': %s", tempdir, err)
 				break
 			}
-			for _, subdir := range []string{"current"} {
-				dir := filepath.Join(tempdir, subdir)
-				if err := os.Mkdir(dir, 0700); err != nil {
-					log.Printf("Cannot create '%s': %s", dir, err)
-					goto fatal
-				}
-			}
 			log.Printf("Temporary directory: '%s'", tempdir)
 			return
 		}
 	}
-
-fatal:
-	log.Fatalf("Cannot create temporary directory")
 }
 
 func Tmp(filename string) string {
 	return filepath.Join(tempdir, filename)
+}
+
+func CreateCurrentDir() {
+	if err := os.Mkdir(Tmp("current"), 0700); err != nil {
+		log.Printf("Cannot create '%s': %s", Tmp("current"), err)
+	}
+}
+
+func RemoveCurrentDir() {
+	if err := os.RemoveAll(Tmp("current")); err != nil {
+		log.Printf("Cannot remove '%s': %s", Tmp("current"), err)
+	}
 }
 
 func RemoveTempDir() {
@@ -81,31 +83,8 @@ func LinkJudge(problemDir string) {
 	}
 }
 
-func CreateISO() {
-	// gen iso image
-	geniso := exec.Command("genisoimage",
-		"-f",                // follow symlinks
-   // "-file-mode", "400", // read-only for tc
-	   "-uid", "5000", // garzon user = 5000 (tc = 1001)
-		"-o", filepath.Join(tempdir, "iso"),
-		Tmp("current"))
-
-	output, err := geniso.CombinedOutput()
-	if err != nil {
-		log.Printf("genisoimage error: %s", err)
-		log.Printf("genisoimage output: %s", output)
-	}
-}
-
-func RemoveISO() {
-	err := os.Remove(filepath.Join(tempdir, "iso"))
-	if err != nil {
-		log.Printf("Cannot remove 'iso'")
-	}
-}
-
-
-func Eval(problemDir string, solution []byte) error {
+func CreateISO(problemDir string, solution []byte) error {
+	// Check Problem dir
 	if info, err := os.Stat(problemDir); err == nil {
 		if !info.IsDir() {
 			return fmt.Errorf("'%s' is not a directory", problemDir)
@@ -118,12 +97,65 @@ func Eval(problemDir string, solution []byte) error {
 	if err := AddSolution(solution); err != nil {
 		return err
 	}
-	CreateISO()
-	qemu.Monitor("change ide1-cd0 " + filepath.Join(tempdir, "iso")) 
-	qemu.ShellLog("/mnt/vda/garzon.sh") // execute judge
+
+	// gen iso image
+	geniso := exec.Command("genisoimage",
+		"-f", // follow symlinks
+		// "-file-mode", "400", // read-only for tc
+		"-uid", "5000", // garzon user = 5000 (tc = 1001)
+		"-o", filepath.Join(tempdir, "iso"),
+		Tmp("current"))
+
+	output, err := geniso.CombinedOutput()
+	if err != nil {
+		log.Printf("genisoimage error: %s", err)
+		log.Printf("genisoimage output: %s", output)
+	}
+	return nil
+}
+
+func RemoveISO() {
+	err := os.Remove(filepath.Join(tempdir, "iso"))
+	if err != nil {
+		log.Printf("Cannot remove 'iso'")
+	}
+}
+
+func Eval(problemDir string, solution []byte) error {
+	CreateCurrentDir()
+
+	if err := CreateISO(problemDir, solution); err != nil {
+		return err
+	}
+	qemu.Reset()
+	qemu.Monitor("change ide1-cd0 " + filepath.Join(tempdir, "iso"))
+
+	var (
+		nlin       int
+		hash       string
+		veredict   string
+		isVeredict bool
+	)
+	qemu.ShellReport("/mnt/vda/garzon.sh", func(line string) {
+		nlin++
+		switch {
+		case nlin == 1:
+			hash = line
+		case line == hash:
+			isVeredict = true
+		default:
+			if isVeredict {
+				veredict += line[:len(line)-1] + "\n" // FIXME: \r por aquí?
+			} else {
+				fmt.Printf("%s\n", line)
+			}
+		}
+	}) // execute judge
+	fmt.Printf("Veredict: %s", veredict)
 	qemu.Monitor("eject ide1-cd0")
 	RemoveISO()
-	qemu.Restore()
+	RemoveCurrentDir()
+
 	return nil
 }
 
@@ -153,7 +185,7 @@ func main() {
 	qemu.LoadVM()
 	for _, p := range flag.Args() {
 		if absp, err := filepath.Abs(p); err == nil {
-			if err := Eval(absp, []byte("42")); err != nil {
+			if err := Eval(absp, []byte("43")); err != nil {
 				log.Printf("Eval error: %s", err)
 			}
 		} else {
