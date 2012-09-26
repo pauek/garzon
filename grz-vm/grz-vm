@@ -231,7 +231,7 @@ shash=\$(sha1sum /mnt/cdrom/solution | cut -d' ' -f1)
 su garzon -c "
 cd /mnt/cdrom/problem;
 echo \$shash;
-../judge < ../solution > /tmp/output-\$shash;
+PATH=\$PATH:/usr/local/bin:/usr/local/sbin:/mnt/vda/src/go/bin ../judge < ../solution > /tmp/output-\$shash;
 echo \$shash;
 cat /tmp/output-\$shash;
 rm -f /tmp/output-\$shash;
