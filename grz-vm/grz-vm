@@ -19,21 +19,28 @@ function _download() {
     done
 }
 
+mkdir -p $HOME/.grz/cache
+
 function _cached_download() {
-    mkdir -p $HOME/.grz/cache
-    file=$1
-    cachedfile=$HOME/.grz/cache/$file
-    if ! [ -f $cachedfile ]; then
-        url=${mirror}${tcz_dir}${file}.tcz
-        curl -s -o $cachedfile $url
-    else 
-        echo -n " [hit]"
+    pkg=$1
+    if ! [ -f ${pkg} ]; then
+        if [ -f $HOME/.grz/cache/${pkg} ]; then 
+            echo -n " [from cache]"
+            sudo cp $HOME/.grz/cache/${pkg} ${pkg}
+        else
+            # porqué no puedo poner 'curl' aquí !?!?
+            sudo wget -q ${mirror}${tcz_dir}${pkg}
+            if [ -f ${pkg} ]; then
+                cp ${pkg} $HOME/.grz/cache/${pkg}
+            fi
+        fi
+    else
+        echo -n " [already installed]"
     fi
-    [ -f $cachedfile ] && sudo cp $cachedfile .
 }
 
 function _download_packages() {
-    pushd tce/optional
+    _silent pushd tce/optional
     for file in $*; do
         for ext in .tcz .tcz.dep; do
             echo -n ${file}${ext}
@@ -41,19 +48,26 @@ function _download_packages() {
             echo
         done
     done
-    popd
+    _silent popd
 }
 
 function _silent() {
     $* &> /dev/null;
 }
 
+function _report() {
+    echo -n $1
+    shift
+    _silent $*
+    echo
+}
+
 function _purge() {
-    pushd tce/optional
+    _silent pushd tce/optional
     for file in $*; do
         sudo rm -f ${file}.tcz{,.dep}
     done
-    popd
+    _silent popd
 }
 
 function _onboot() {
@@ -71,11 +85,11 @@ function _image_mount() {
     mkdir __image__
     sync
     sudo mount -o loop ${imgfile} __image__
-    pushd __image__
+    _silent pushd __image__
 }
 
 function _image_umount() {
-    popd
+    _silent popd
     sync
     sudo umount __image__
     rmdir __image__
@@ -97,29 +111,6 @@ function _image_init() {
     sudo touch tce/bootlocal.sh # this is called from /opt/bootlocal.sh
     _download_packages mirrors kmaps
     _onboot mirrors.tcz kmaps.tcz
-    sudo sh -c "cat > garzon.sh" <<EOF
-#!/bin/sh
-
-# Mount CD-ROM (read-only problem)
-mount /dev/cdrom /mnt/cdrom
-
-# Compile judge
-hash=\$(sha1sum /mnt/cdrom/judge.go | cut -d' ' -f1)
-mkdir -p /mnt/vda/judges
-if ! [ -f /mnt/vda/judges/\$hash ]; then
-   /mnt/vda/src/go/bin/go build -o /mnt/vda/judges/\$hash /mnt/cdrom/judge.go 
-fi
-
-# Launch judge
-su garzon -c "
-cd /mnt/cdrom/problem; 
-/mnt/vda/judges/\$hash < ../solution"
-
-# Umount CD-ROM
-umount /mnt/cdrom
-
-EOF
-    sudo sh -c "chmod +x garzon.sh"
 }
 
 # init 
@@ -211,7 +202,7 @@ function remaster() {
     # enable root terminal on serial port
     sudo sh -c "cat >> etc/inittab" <<EOF
 # garzon
-ttyS0::once:/bin/sh -c "PS1=$(echo garzon | sha1sum | cut -d' ' -f1) sh"
+ttyS0::once:/bin/sh -c "PS1=\$(cat /proc/cmdline | xargs -n1 | grep grz | cut -d= -f2) sh"
 EOF
 
     # permit execution of script from 'vda' partition
@@ -227,6 +218,31 @@ EOF
     sudo sh -c "cat >> etc/group" <<EOF
 garzon:x:5000:
 EOF
+
+    # create judge script
+    sudo sh -c "cat > bin/garzon.sh" <<EOF
+#!/bin/sh
+
+# Mount CD-ROM (read-only problem)
+mount /dev/cdrom /mnt/cdrom
+
+# Launch judge
+shash=\$(sha1sum /mnt/cdrom/solution | cut -d' ' -f1)
+su garzon -c "
+cd /mnt/cdrom/problem;
+echo \$shash;
+../judge < ../solution > /tmp/output-\$shash;
+echo \$shash;
+cat /tmp/output-\$shash;
+rm -f /tmp/output-\$shash;
+"
+
+# Umount CD-ROM
+umount /mnt/cdrom
+
+EOF
+    sudo sh -c "chmod +x bin/garzon.sh"
+
     sudo mkdir -p home/garzon
     sudo chown 5000:5000 home/garzon
     sudo chmod 700 home/garzon
@@ -257,8 +273,9 @@ function createimg() {
             exit 0
         fi
     fi
-    dd if=/dev/zero of=$file bs=1M count=$sz
-    sudo mkfs.ext3 -F $file
+    _report "Creating image... "  dd if=/dev/zero of=$file bs=1M count=$sz
+    _report "Formatting image... " sudo mkfs.ext3 -F $file
+    echo "Installing base packages: "
     _image_mount $file
     _image_init
     _image_umount
@@ -269,6 +286,10 @@ function pkglist() {
 gcc
 go
 EOF
+}
+
+function pkgclean() {
+    rm -rf $HOME/.grz/cache/*
 }
 
 ## Installation scripts ####################################################
@@ -287,10 +308,13 @@ function _install_go() {
 
     # Decompress source
     sudo mkdir src
-    pushd src
-    sudo curl http://go.googlecode.com/files/go1.0.2.src.tar.gz
-    sudo tar xzvf go1.0.2.src.tar.gz
-    popd
+    _silent pushd src
+    gosrc=go1.0.3.src.tar.gz
+    if ! [ -f $gosrc ]; then
+        _report "Downloading Go source... " sudo wget http://go.googlecode.com/files/$gosrc
+    fi
+    _report "Decompressing Go source... " sudo tar xzvf $gosrc
+    _silent popd
 
     # Install bash + gcc (+ linux headers)
     _download_packages bash ncurses ncurses-common \
@@ -300,7 +324,8 @@ function _install_go() {
     _image_umount
 
     # Compile Go inside the VM
-    (sleep 10; cat <<EOF
+    (cat <<EOF
+PS1=''
 su tc -c "tce-load -i bash"
 su tc -c "tce-load -i gcc"
 su tc -c "tce-load -i eglibc_base-dev.tcz"
@@ -314,7 +339,7 @@ EOF
             -initrd initrd.gz \
             -append "tce=vda kmap=qwerty/es vga=788 nodhcp" \
             -drive file=${imgfile},if=virtio \
-            -serial stdio \
+            -nographic \
             -m 512M
 
     # Set environment + erase unneeded packages
@@ -381,7 +406,7 @@ function launch() {
     fi
 
     kvm -kernel vmlinuz -initrd initrd.gz \
-        -append "tce=vda kmap=qwerty/es vga=788 nodhcp" \
+        -append "tce=vda kmap=qwerty/es vga=788 nodhcp grz=[${imgname}]" \
         -drive "file=$imgname,if=virtio" \
         -net none \
         $*
