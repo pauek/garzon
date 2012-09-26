@@ -153,8 +153,11 @@ func (Q *QEmu) Shell(cmd string) string {
 	return Q.shell(cmd, nil)
 }
 
-func (Q *QEmu) ShellLog(cmd string) {
-	log.Printf("Output:\n%s", Q.shell(cmd, nil))
+func (Q *QEmu) ShellLog(cmd string) string {
+	log.Printf("Shell: '%s'", cmd)
+	output := Q.shell(cmd, nil)
+	log.Printf("Output:\n%s", output)
+	return output
 }
 
 func (Q *QEmu) ShellReport(cmd string, report func(string)) string {

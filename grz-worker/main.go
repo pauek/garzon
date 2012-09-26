@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha1"
 	"flag"
 	"fmt"
 	"io"
@@ -8,7 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"crypto/sha1"
+	"strings"
 )
 
 var (
@@ -108,7 +109,7 @@ func AddSolution(solution []byte) error {
 }
 
 func Sha1Sum(filename string) (sha1sum string, err error) {
-	file, err := os.Open(filename); 
+	file, err := os.Open(filename)
 	if err != nil {
 		return "", err
 	}
@@ -120,9 +121,9 @@ func Sha1Sum(filename string) (sha1sum string, err error) {
 func CopyFile(dest, source string, bytes int64) (written int64, err error) {
 	from, err := os.Open(source)
 	if err != nil {
-		return 0, fmt.Errorf("Cannot open '%s': %s" , source, err)
+		return 0, fmt.Errorf("Cannot open '%s': %s", source, err)
 	}
-	to, err := os.OpenFile(dest, os.O_WRONLY | os.O_CREATE, 0600)
+	to, err := os.OpenFile(dest, os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		return 0, fmt.Errorf("Cannot create '%s': %s", dest, err)
 	}
@@ -140,52 +141,105 @@ func CopyFile(dest, source string, bytes int64) (written int64, err error) {
 	return
 }
 
-func CompileJudgeInVM(judgesrc, judgebin string) {
+func CompileJudgeInVM(judgesrc, judgebin string) error {
 	log.Printf("Compiling judge: %s", judgesrc)
+	base := filepath.Base(judgesrc)
+	ext := filepath.Ext(judgesrc)
 
+	// Transfer sources to VM
 	written, err := CopyFile(Tmp("shared.img"), judgesrc, -1)
 	if err != nil {
-		log.Printf("Cannot copy '%s' to shared image: %s" , judgesrc, err)
+		return fmt.Errorf("Cannot copy '%s' to shared image: %s", judgesrc, err)
+	}
+	qemu.Shell(fmt.Sprintf("dd if=/dev/vdb of=/tmp/%s bs=1 count=%d", base, written))
+
+	// Compile
+	switch ext {
+	case ".go":
+		output := qemu.Shell(fmt.Sprintf("/mnt/vda/src/go/bin/go build -o /tmp/judge.bin /tmp/%s", base))
+		// FIXME: Compilation error?
+		fmt.Printf("Compilation output:\n%s", output)
+
+	case ".cc", ".cpp", ".cxx":
+		cmd := strings.Join([]string{
+			"PATH=$PATH:/usr/local/bin",
+			"/usr/local/bin/g++",
+			"-o /tmp/judge.bin",
+			fmt.Sprintf("/tmp/%s", base),
+		}, " ")
+		output := qemu.Shell(cmd)
+		if output != "" {
+			return fmt.Errorf("Judge does not compile:\n%s", output)
+		}
+		fmt.Printf("Compilation output:\n%s", output)
+
+	default:
+		return fmt.Errorf("Language not supported")
 	}
 
-	qemu.Shell(fmt.Sprintf("dd if=/dev/vdb of=/tmp/judge.go bs=1 count=%d", written))
-	qemu.Shell("/mnt/vda/src/go/bin/go build -o /tmp/judge.bin /tmp/judge.go")
+	// Get the binary from VM
 	output := qemu.Shell("dd if=/tmp/judge.bin of=/dev/vdb bs=1")
 	qemu.Shell("sync")
 	var bytes int64
 	fmt.Sscanf(output, "%d", &bytes)
-
 	_, err = CopyFile(judgebin, Tmp("shared.img"), bytes)
 	if err != nil {
-		log.Printf("Cannot copy shared image to '%s': %s" , judgebin, err)
+		return fmt.Errorf("Cannot copy shared image to '%s': %s", judgebin, err)
 	}
+
+	qemu.Reset()
+
+	return nil
 }
 
-func CompileAndLinkJudge(problemDir string) {
-	judgesrc := filepath.Join(problemDir, "judge.go")
-	
+func CompileAndLinkJudge(problemDir string) error {
+	// Find judge source
+	results, err := filepath.Glob(filepath.Join(problemDir, "judge.*"))
+	if err != nil {
+		return fmt.Errorf("Cannot glob 'judges.*': %s", err)
+	}
+	candidates := []string{}
+	for _, f := range results {
+		ext := filepath.Ext(f)
+		for _, e := range []string{".go", ".cc", ".cpp", ".cxx"} {
+			if ext == e {
+				candidates = append(candidates, f)
+				break
+			}
+		}
+	}
+	if len(candidates) > 1 {
+		return fmt.Errorf("Multiple judge source files")
+	} else if len(candidates) == 0 {
+		return fmt.Errorf("No judge source file")
+	}
+	judgesrc := candidates[0]
+
 	// compute Sha1sum of judge source code
 	sha1, err := Sha1Sum(judgesrc)
 	if err != nil {
 		log.Printf("Cannot compute sha1sum of '%s': %s", judgesrc, err)
 	}
-	
-	// Look for already compiled judge
-	judgebin := filepath.Join(homedir, "judges/" + sha1)
-	_, err = os.Stat(judgebin)
-	if err != nil {
-		CompileJudgeInVM(judgesrc, judgebin)
+
+	// Look for already compiled judge otherwise compile it
+	judgebin := filepath.Join(homedir, "judges/"+sha1)
+	if _, err1 := os.Stat(judgebin); err1 != nil {
+		if err2 := CompileJudgeInVM(judgesrc, judgebin); err2 != nil {
+			return fmt.Errorf("Cannot compile: %s", err2)
+		}
 	}
 
 	// Link judge
 	if err := os.Symlink(judgebin, Tmp("current/judge")); err != nil {
-		log.Printf("Cannot create symlink: %s", err)
+		return fmt.Errorf("Cannot create symlink: %s", err)
 	}
 
 	// Chmod +x
 	if err := os.Chmod(judgebin, 0700); err != nil {
-		log.Printf("Cannot make '%s' executable", judgebin)
+		return fmt.Errorf("Cannot make '%s' executable", judgebin)
 	}
+
+	return nil
 }
 
 func CreateISO(problemDir string, solution []byte) error {
@@ -198,7 +252,9 @@ func CreateISO(problemDir string, solution []byte) error {
 		return fmt.Errorf("'%s' does not exist", problemDir)
 	}
 	LinkProblem(problemDir)
-	CompileAndLinkJudge(problemDir)
+	if err := CompileAndLinkJudge(problemDir); err != nil {
+		return err
+	}
 	if err := AddSolution(solution); err != nil {
 		return err
 	}
@@ -211,19 +267,17 @@ func CreateISO(problemDir string, solution []byte) error {
 		"-o", filepath.Join(tempdir, "iso"),
 		Tmp("current"))
 
-	output, err := geniso.CombinedOutput()
-	if err != nil {
-		log.Printf("genisoimage error: %s", err)
-		log.Printf("genisoimage output: %s", output)
+	if output, err := geniso.CombinedOutput(); err != nil {
+		return fmt.Errorf("genisoimage error: %s\noutput:\n%s", err, output)
 	}
 	return nil
 }
 
-func RemoveISO() {
-	err := os.Remove(filepath.Join(tempdir, "iso"))
-	if err != nil {
-		log.Printf("Cannot remove 'iso'")
+func RemoveISO() error {
+	if err := os.Remove(filepath.Join(tempdir, "iso")); err != nil {
+		return fmt.Errorf("Cannot remove 'iso': %s", err)
 	}
+	return nil
 }
 
 func Eval(problemDir string, solution []byte) error {
@@ -287,7 +341,6 @@ func main() {
 		qemu.Quit()
 		return
 	}
-
 
 	qemu.LoadVM()
 	for _, p := range flag.Args() {
