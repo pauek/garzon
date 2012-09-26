@@ -154,32 +154,34 @@ func CompileJudgeInVM(judgesrc, judgebin string) error {
 	qemu.Shell(fmt.Sprintf("dd if=/dev/vdb of=/tmp/%s bs=1 count=%d", base, written))
 
 	// Compile
+	var cmd string
+
 	switch ext {
 	case ".go":
-		cmd := strings.Join([]string{
+		cmd = strings.Join([]string{
 			"/mnt/vda/src/go/bin/go build",
 			"-o /tmp/judge.bin",
 			fmt.Sprintf("/tmp/%s", base),
 		}, " ")
-		output := qemu.Shell(cmd)
-		if output != "" {
-			return fmt.Errorf("Judge does not compile:\n%s", output)
-		}
 
-	case ".cc", ".cpp", ".cxx":
-		cmd := strings.Join([]string{
+	case ".c", ".cc", ".cpp", ".cxx":
+		cc := "g++"
+		if ext == ".c" {
+			cc = "gcc"
+		}
+		cmd = strings.Join([]string{
 			"PATH=$PATH:/usr/local/bin",
-			"/usr/local/bin/g++",
+			fmt.Sprintf("/usr/local/bin/%s", cc),
 			"-o /tmp/judge.bin",
 			fmt.Sprintf("/tmp/%s", base),
 		}, " ")
-		output := qemu.Shell(cmd)
-		if output != "" {
-			return fmt.Errorf("Judge does not compile:\n%s", output)
-		}
 
 	default:
 		return fmt.Errorf("Language not supported")
+	}
+
+	if output := qemu.Shell(cmd); output != "" {
+		return fmt.Errorf("Judge does not compile:\n%s", output)
 	}
 
 	// Get the binary from VM
@@ -199,19 +201,9 @@ func CompileJudgeInVM(judgesrc, judgebin string) error {
 
 func CompileAndLinkJudge(problemDir string) error {
 	// Find judge source
-	results, err := filepath.Glob(filepath.Join(problemDir, "judge.*"))
+	candidates, err := filepath.Glob(filepath.Join(problemDir, "judge.*"))
 	if err != nil {
 		return fmt.Errorf("Cannot glob 'judges.*': %s", err)
-	}
-	candidates := []string{}
-	for _, f := range results {
-		ext := filepath.Ext(f)
-		for _, e := range []string{".go", ".cc", ".cpp", ".cxx"} {
-			if ext == e {
-				candidates = append(candidates, f)
-				break
-			}
-		}
 	}
 	if len(candidates) > 1 {
 		return fmt.Errorf("Multiple judge source files")
