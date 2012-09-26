@@ -11,10 +11,10 @@ function _download() {
             read resp
             if [ $resp == "y" ]; then
                 rm -f $file
-                curl -s ${mirror}${dist_dir}${file}
+                wget -q ${mirror}${dist_dir}${file}
             fi
         else 
-            curl -s ${mirror}${dist_dir}${file}
+            wget -q ${mirror}${dist_dir}${file}
         fi
     done
 }
