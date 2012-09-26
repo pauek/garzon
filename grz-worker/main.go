@@ -156,9 +156,15 @@ func CompileJudgeInVM(judgesrc, judgebin string) error {
 	// Compile
 	switch ext {
 	case ".go":
-		output := qemu.Shell(fmt.Sprintf("/mnt/vda/src/go/bin/go build -o /tmp/judge.bin /tmp/%s", base))
-		// FIXME: Compilation error?
-		fmt.Printf("Compilation output:\n%s", output)
+		cmd := strings.Join([]string{
+			"/mnt/vda/src/go/bin/go build",
+			"-o /tmp/judge.bin",
+			fmt.Sprintf("/tmp/%s", base),
+		}, " ")
+		output := qemu.Shell(cmd)
+		if output != "" {
+			return fmt.Errorf("Judge does not compile:\n%s", output)
+		}
 
 	case ".cc", ".cpp", ".cxx":
 		cmd := strings.Join([]string{
@@ -171,7 +177,6 @@ func CompileJudgeInVM(judgesrc, judgebin string) error {
 		if output != "" {
 			return fmt.Errorf("Judge does not compile:\n%s", output)
 		}
-		fmt.Printf("Compilation output:\n%s", output)
 
 	default:
 		return fmt.Errorf("Language not supported")
