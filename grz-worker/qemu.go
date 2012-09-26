@@ -37,6 +37,7 @@ func (Q *QEmu) args(addargs ...string) (args []string) {
 		"-kernel", root + "/vmlinuz",
 		"-initrd", root + "/initrd.gz",
 		"-drive", "file=" + root + "/" + Q.Image + ",if=virtio",
+		"-drive", "file=" + Tmp("shared.img") + ",if=virtio",
 		"-append", fmt.Sprintf(`tce=vda kmap=qwerty/es vga=788 nodhcp grz=%s`, magicPrompt),
 		"-net", "none",
 		"-nographic",     // implies "-serial stdio -monitor stdio"
@@ -150,6 +151,10 @@ func (Q *QEmu) Monitor(cmd string) {
 
 func (Q *QEmu) Shell(cmd string) string {
 	return Q.shell(cmd, nil)
+}
+
+func (Q *QEmu) ShellLog(cmd string) {
+	log.Printf("Output:\n%s", Q.shell(cmd, nil))
 }
 
 func (Q *QEmu) ShellReport(cmd string, report func(string)) string {

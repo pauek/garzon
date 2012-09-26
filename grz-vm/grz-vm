@@ -111,35 +111,6 @@ function _image_init() {
     sudo touch tce/bootlocal.sh # this is called from /opt/bootlocal.sh
     _download_packages mirrors kmaps
     _onboot mirrors.tcz kmaps.tcz
-    sudo sh -c "cat > garzon.sh" <<EOF
-#!/bin/sh
-
-# Mount CD-ROM (read-only problem)
-mount /dev/cdrom /mnt/cdrom
-
-# Compile judge
-jhash=\$(sha1sum /mnt/cdrom/judge.go | cut -d' ' -f1)
-mkdir -p /mnt/vda/judges
-if ! [ -f /mnt/vda/judges/\$jhash ]; then
-   /mnt/vda/src/go/bin/go build -o /mnt/vda/judges/\$jhash /mnt/cdrom/judge.go 
-fi
-
-# Launch judge
-shash=\$(sha1sum /mnt/cdrom/solution | cut -d' ' -f1)
-su garzon -c "
-cd /mnt/cdrom/problem; 
-echo \$shash;
-/mnt/vda/judges/\$jhash < ../solution > /tmp/\$shash;
-echo \$shash;
-cat /tmp/\$shash;
-rm -f /tmp/\$shash;
-"
-
-# Umount CD-ROM
-umount /mnt/cdrom
-
-EOF
-    sudo sh -c "chmod +x garzon.sh"
 }
 
 # init 
@@ -247,6 +218,31 @@ EOF
     sudo sh -c "cat >> etc/group" <<EOF
 garzon:x:5000:
 EOF
+
+    # create judge script
+    sudo sh -c "cat > bin/garzon.sh" <<EOF
+#!/bin/sh
+
+# Mount CD-ROM (read-only problem)
+mount /dev/cdrom /mnt/cdrom
+
+# Launch judge
+shash=\$(sha1sum /mnt/cdrom/solution | cut -d' ' -f1)
+su garzon -c "
+cd /mnt/cdrom/problem;
+echo \$shash;
+../judge < ../solution > /tmp/output-\$shash;
+echo \$shash;
+cat /tmp/output-\$shash;
+rm -f /tmp/output-\$shash;
+"
+
+# Umount CD-ROM
+umount /mnt/cdrom
+
+EOF
+    sudo sh -c "chmod +x bin/garzon.sh"
+
     sudo mkdir -p home/garzon
     sudo chown 5000:5000 home/garzon
     sudo chmod 700 home/garzon
