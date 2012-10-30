@@ -1,6 +1,7 @@
 package main
 
 import (
+	"code.google.com/p/go.net/websocket"
 	"crypto/sha1"
 	"flag"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 var (
@@ -275,11 +277,11 @@ func RemoveISO() error {
 	return nil
 }
 
-func Eval(problemDir string, solution []byte) error {
+func Eval(problemDir string, solution []byte, report func(msg string)) (veredict string, err error) {
 	CreateCurrentDir()
 
 	if err := CreateISO(problemDir, solution); err != nil {
-		return err
+		return "", err
 	}
 	qemu.Reset()
 	qemu.Monitor("change ide1-cd0 " + filepath.Join(tempdir, "iso"))
@@ -287,7 +289,6 @@ func Eval(problemDir string, solution []byte) error {
 	var (
 		nlin       int
 		hash       string
-		veredict   string
 		isVeredict bool
 	)
 	qemu.ShellReport("/bin/garzon.sh", func(line string) {
@@ -298,10 +299,11 @@ func Eval(problemDir string, solution []byte) error {
 		case line == hash:
 			isVeredict = true
 		default:
+			line = line[:len(line)-1] // strip '\r'
 			if isVeredict {
-				veredict += line[:len(line)-1] + "\n" // FIXME: \r por aquí?
+				veredict += line + "\n" // FIXME: \r por aquí?
 			} else {
-				fmt.Printf("%s\n", line)
+				report(line)
 			}
 		}
 	}) // execute judge
@@ -309,8 +311,7 @@ func Eval(problemDir string, solution []byte) error {
 	qemu.Monitor("eject ide1-cd0")
 	RemoveISO()
 	RemoveCurrentDir()
-
-	return nil
+	return
 }
 
 var (
@@ -337,15 +338,72 @@ func main() {
 		return
 	}
 
+	var (
+		err error
+		ws *websocket.Conn
+	)
+
 	qemu.LoadVM()
-	for _, p := range flag.Args() {
-		if absp, err := filepath.Abs(p); err == nil {
-			if err := Eval(absp, []byte("43")); err != nil {
-				log.Printf("Eval error: %s", err)
-			}
-		} else {
-			log.Printf("Error with path '%s'", absp)
+	defer qemu.Quit()
+
+	for {
+		// Connect Loop
+		origin := "http://localhost/"
+		url := "ws://localhost:6060/worker"
+		for ws, err = websocket.Dial(url, "", origin); err != nil; {
+			log.Printf("Error dialing: %s", err)
+			time.Sleep(5 * time.Second)
+			log.Printf("Retrying...")
 		}
+		log.Printf("Connected!")
+
+		for {
+			// Receive job
+			var submission struct {
+				ProblemID string
+				Data      []byte
+			}
+			err = websocket.JSON.Receive(ws, &submission)
+			if err != nil {
+				log.Printf("Cannot receive job: %s", err)
+				break
+			}
+			id := submission.ProblemID
+			data := submission.Data
+
+			// Reply "ok" || "send problem" || "alive"
+			//   TODO: Check cache for ProblemID
+			if id == "" {
+				websocket.JSON.Send(ws, "alive")
+				continue
+			}
+			websocket.JSON.Send(ws, "ok")
+			log.Printf("Received job '%s': %d bytes", id, len(data))
+
+			// Determine path
+			absp, err := filepath.Abs(id)
+			if err != nil {
+				msg := fmt.Sprintf("No problem with ID '%s'", id)
+				log.Print(msg)
+				websocket.JSON.Send(ws, "ERROR: " + msg)
+				continue
+			}
+
+			// Eval
+			veredict, err := Eval(absp, data, func(update string) {
+				websocket.JSON.Send(ws, update)
+			})
+			if err != nil {
+				msg := fmt.Sprintf("Eval error: %s", err)
+				log.Print(msg)
+				websocket.JSON.Send(ws, "ERROR: "+msg)
+				continue
+			}
+			log.Printf("VEREDICT: %s", veredict)
+			websocket.JSON.Send(ws, "VEREDICT\n"+veredict)
+		}
+
+		// Close connection
+		ws.Close()
 	}
-	qemu.Quit()
 }
