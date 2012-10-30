@@ -340,7 +340,7 @@ func main() {
 
 	var (
 		err error
-		ws *websocket.Conn
+		ws  *websocket.Conn
 	)
 
 	qemu.LoadVM()
@@ -385,7 +385,7 @@ func main() {
 			if err != nil {
 				msg := fmt.Sprintf("No problem with ID '%s'", id)
 				log.Print(msg)
-				websocket.JSON.Send(ws, "ERROR: " + msg)
+				websocket.JSON.Send(ws, "ERROR: "+msg)
 				continue
 			}
 

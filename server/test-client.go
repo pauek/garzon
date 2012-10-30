@@ -9,7 +9,7 @@ import (
 
 type Submission struct {
 	ProblemID string
-	Data []byte
+	Data      []byte
 }
 
 func main() {
@@ -19,7 +19,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	
+
 	submission := Submission{"/home/pauek/Academio/Problems/Test/42", []byte("42")}
 	if err := websocket.JSON.Send(ws, submission); err != nil {
 		log.Fatalf("Cannot send: %s", err)

@@ -14,7 +14,7 @@ var numWorkers int32 = 0
 
 type Submission struct {
 	ProblemID string
-	Data []byte
+	Data      []byte
 }
 
 type Job struct {
@@ -73,7 +73,7 @@ func newWorker(ws *websocket.Conn) {
 	log.Printf("Connected [%s] (active = %d)\n", ws.RemoteAddr(), numWorkers)
 	for {
 		select {
-		case j := <- jobs:
+		case j := <-jobs:
 			if err := handleJob(ws, j); err != nil {
 				log.Printf("Error handling job: %s", err)
 				jobs <- j
