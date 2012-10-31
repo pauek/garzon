@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/exec"
+	"io/ioutil"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -12,9 +16,23 @@ import (
 
 var numWorkers int32 = 0
 
+var grzPath string
+
+func init() {
+	grzPath = os.Getenv("GARZON_PATH")
+	if grzPath == "" {
+		grzPath = "."
+	}
+}
+
 type Submission struct {
 	ProblemID string
 	Data      []byte
+}
+
+type Problem struct {
+	Id    string
+	Targz []byte
 }
 
 type Job struct {
@@ -24,13 +42,56 @@ type Job struct {
 
 var jobs = make(chan *Job)
 
-func sendProblem(ws *websocket.Conn, job *Job) error {
-	// TODO
-	return nil
+func isDir(dir string) bool {
+	if info, err := os.Stat(dir); err == nil {
+		return info.IsDir()
+	}
+	return false
+}
+
+func findProblem(id string) (dir string) {
+	for _, root := range filepath.SplitList(grzPath) {
+		dir = filepath.Join(root, id)
+		if isDir(dir) {
+			return
+		}
+	}
+	return ""
+}
+
+func compressProblem(dir string) (targz []byte, err error) {
+	filename := filepath.Join(os.TempDir(), "problem.tar.gz")
+	err = exec.Command("tar", "-czf", filename, "-C", dir, ".").Run()
+	if err != nil {
+		return nil, fmt.Errorf("Cannot compress: %s", err)
+	}
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("Cannot open '%s': %s", filename, err)
+	}
+	targz, err = ioutil.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("Cannot read '%s': %s", filename, err)
+	}
+	file.Close()
+	// TODO: erase 'problem.tar.gz'
+	return
 }
 
 func handleJob(ws *websocket.Conn, job *Job) error {
-	// Send to worker
+	// Find problem
+	var dir string
+	if job.ProblemID != "" {
+		dir = findProblem(job.ProblemID)
+		if dir == "" {
+			msg := fmt.Sprintf("Problem '%s' not found", job.ProblemID)
+			job.updates <- fmt.Sprintf("ERROR: %s", msg)
+			close(job.updates)
+			return fmt.Errorf("%s", msg)
+		}
+	}
+
+	// Submit (+ Send tar.gz is necessary)
 	websocket.JSON.Send(ws, job.Submission)
 	var reply string
 	if err := websocket.JSON.Receive(ws, &reply); err != nil {
@@ -39,9 +100,15 @@ func handleJob(ws *websocket.Conn, job *Job) error {
 	switch reply {
 	case "alive":
 		return nil
-	case "send problem":
-		sendProblem(ws, job)
-		return nil
+
+	case "need targz":
+		targz, err := compressProblem(dir)
+		if err != nil {
+			return fmt.Errorf("Cannot send problem: %s", err)
+		}
+		websocket.JSON.Send(ws, Problem{Id: job.ProblemID, Targz: targz})
+		log.Printf(`Sent problem "%s"`, dir)
+
 	case "ok":
 	}
 	log.Printf(`Submitted: %s`, job.Submission.ProblemID)
@@ -78,7 +145,7 @@ func newWorker(ws *websocket.Conn) {
 		case j := <-jobs:
 			if err := handleJob(ws, j); err != nil {
 				log.Printf("Error handling job: %s", err)
-				jobs <- j
+				// jobs <- j
 			}
 		case <-time.After(10 * time.Second):
 			if err := isAlive(ws); err != nil {

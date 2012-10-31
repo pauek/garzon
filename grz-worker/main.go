@@ -320,6 +320,17 @@ var (
 	prepare bool
 )
 
+func ensureTempDir(tmpdir string) {
+	err := os.RemoveAll(tmpdir)
+	if err != nil {
+		log.Fatalf("Cannot remove tmp dir '%s': %s", tmpdir, err)
+	}
+	err = os.Mkdir(tmpdir, 0700)
+	if err != nil {
+		log.Fatalf("Cannot create tmp dir '%s': %s", tmpdir, err)
+	}
+}
+
 func main() {
 	flag.StringVar(&image, "image", "garzon.qcow2", "Specify image file to use")
 	flag.BoolVar(&prepare, "prepare", false, "Only create the snapshot")
@@ -340,7 +351,9 @@ func main() {
 
 	var (
 		err error
+		msg, filename, veredict, tmpdir string
 		ws  *websocket.Conn
+		file *os.File
 	)
 
 	qemu.LoadVM()
@@ -349,6 +362,7 @@ func main() {
 	grzServer := "localhost:8080"
 
 	for {
+
 		// Connect Loop
 		origin := fmt.Sprintf("http://%s/", grzServer)
 		url := fmt.Sprintf("ws://%s/_new_worker", grzServer)
@@ -379,30 +393,56 @@ func main() {
 				websocket.JSON.Send(ws, "alive")
 				continue
 			}
-			websocket.JSON.Send(ws, "ok")
 			log.Printf("Received job '%s': %d bytes", id, len(data))
 
-			// Determine path
-			absp, err := filepath.Abs(id)
-			if err != nil {
-				msg := fmt.Sprintf("No problem with ID '%s'", id)
-				log.Print(msg)
-				websocket.JSON.Send(ws, "ERROR: "+msg)
-				continue
+			websocket.JSON.Send(ws, "need targz")
+			var problem struct {
+				Id string
+				Targz []byte
 			}
+			err = websocket.JSON.Receive(ws, &problem)
+			if err != nil {
+				msg = "Error receiving tar.gz"
+				goto fail
+			}
+			log.Printf("Received problem: %d bytes", len(problem.Targz))
+
+			// Save problem + uncompress
+			filename = filepath.Join(os.TempDir(), "problem.tar.gz")
+			file, err = os.Create(filename)
+			if err != nil {
+				msg = "Error saving problem.tar.gz"
+				goto fail
+			}
+			_, err = file.Write(problem.Targz)
+			if err != nil {
+				msg = "Cannot write tar.gz"
+				goto fail
+			}
+			tmpdir = filepath.Join(os.TempDir(), "garzon")
+			ensureTempDir(tmpdir)
+			err = exec.Command("tar", "-xzf", filename, "-C", tmpdir).Run()
+			if err != nil {
+				msg = fmt.Sprintf("Cannot uncompress '%s'", filename)
+				goto fail
+			}
+			log.Printf("Uncompressed '%s'", filename)
 
 			// Eval
-			veredict, err := Eval(absp, data, func(update string) {
+			veredict, err = Eval(tmpdir, data, func(update string) {
 				websocket.JSON.Send(ws, update)
 			})
 			if err != nil {
-				msg := fmt.Sprintf("Eval error: %s", err)
-				log.Print(msg)
-				websocket.JSON.Send(ws, "ERROR: "+msg)
-				continue
+				msg = "Eval error"
+				goto fail
 			}
 			log.Printf("VEREDICT: %s", veredict)
 			websocket.JSON.Send(ws, "VEREDICT\n"+veredict)
+			continue
+			
+		fail:
+			log.Printf("%s: %s", msg, err)
+			websocket.JSON.Send(ws, fmt.Sprintf("ERROR: %s: %s ", msg, err))
 		}
 
 		// Close connection
