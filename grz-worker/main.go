@@ -321,13 +321,13 @@ var (
 )
 
 func main() {
-	EnsureHomeDir()
-	CreateTempDir()
-	defer RemoveTempDir()
-
 	flag.StringVar(&image, "image", "garzon.qcow2", "Specify image file to use")
 	flag.BoolVar(&prepare, "prepare", false, "Only create the snapshot")
 	flag.Parse()
+
+	EnsureHomeDir()
+	CreateTempDir()
+	defer RemoveTempDir()
 
 	qemu = NewVM(image)
 

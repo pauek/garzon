@@ -28,7 +28,7 @@ func init() {
 	h := sha1.New()
 	fmt.Fprintf(h, "garzon\n")
 	magicPrompt = fmt.Sprintf("%x", h.Sum(nil))
-	log.Printf("MagicPrompt: '%s'\n", magicPrompt)
+	// log.Printf("MagicPrompt: '%s'\n", magicPrompt)
 }
 
 func (Q *QEmu) args(addargs ...string) (args []string) {
