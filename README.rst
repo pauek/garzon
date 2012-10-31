@@ -1,4 +1,3 @@
-
 Garzón: a judge system
 ======================
 
@@ -8,7 +7,7 @@ inspired by the way programming contests work. The system has three
 parts: a load balancer (the 'server'), several workers, and a virtual
 machine or VM that each worker controls:
 
-.. image:: doc/arch.png
+.. image:: https://github.com/pauek/garzon/raw/master/doc/arch.png
 
 There are separate directories for each part:
 
