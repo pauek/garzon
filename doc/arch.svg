@@ -10,12 +10,15 @@
    xmlns:xlink="http://www.w3.org/1999/xlink"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   width="744.09448"
-   height="500"
+   width="600"
+   height="410"
    id="svg2"
    version="1.1"
    inkscape:version="0.47 r22583"
-   sodipodi:docname="arch.svg">
+   sodipodi:docname="arch.svg"
+   inkscape:export-filename="/home/pauek/src/pauek/go/src/garzon/img/arch.png"
+   inkscape:export-xdpi="90"
+   inkscape:export-ydpi="90">
   <defs
      id="defs4">
     <marker
@@ -81,8 +84,8 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="0.7"
-     inkscape:cx="327.44543"
-     inkscape:cy="369.12119"
+     inkscape:cx="252.6086"
+     inkscape:cy="316.99121"
      inkscape:document-units="px"
      inkscape:current-layer="layer1"
      showgrid="false"
@@ -107,15 +110,15 @@
      inkscape:label="Layer 1"
      inkscape:groupmode="layer"
      id="layer1"
-     transform="translate(0,-552.36065)">
+     transform="translate(-74.836832,-590.23071)">
     <path
        style="fill:#ffffff;fill-opacity:0.3358779;stroke:#000000;stroke-width:1.55473995;stroke-linecap:round;stroke-miterlimit:4;stroke-opacity:1;stroke-dashoffset:0"
-       d="m 241.05947,597.08879 0,124.0167 -165.445268,0"
+       d="m 246.77375,594.23165 0,124.0167 -165.445264,0"
        id="rect2816"
        sodipodi:nodetypes="ccc" />
     <g
        id="g4241"
-       transform="translate(121.79261,523.98985)">
+       transform="translate(127.50689,521.13271)">
       <g
          id="g3596">
         <rect
@@ -184,7 +187,7 @@
        height="1052.3622" />
     <g
        id="g4286"
-       transform="matrix(0.44993389,0.58226568,-0.58226568,0.44993389,318.54308,509.09377)">
+       transform="matrix(0.44993389,0.58226568,-0.58226568,0.44993389,324.25736,506.23663)">
       <path
          transform="matrix(0.60975611,0,0,0.60975611,197.67545,51.397453)"
          d="m 502.85715,216.29076 c 0,8.08702 -6.55583,14.64285 -14.64286,14.64285 -8.08702,0 -14.64285,-6.55583 -14.64285,-14.64285 0,-8.08703 6.55583,-14.64286 14.64285,-14.64286 8.08703,0 14.64286,6.55583 14.64286,14.64286 z"
@@ -222,19 +225,19 @@
        id="rect3603-3"
        width="105.33158"
        height="54.018456"
-       x="135.0616"
-       y="666.36444" />
+       x="140.77589"
+       y="663.50726" />
     <text
        xml:space="preserve"
        style="font-size:23.84076309px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:125%;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;font-family:Open Sans;-inkscape-font-specification:Open Sans"
-       x="154.4156"
-       y="701.34717"
+       x="160.1299"
+       y="698.48999"
        id="text3592-1"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan3594-4"
-         x="154.4156"
-         y="701.34717">server</tspan></text>
+         x="160.1299"
+         y="698.48999">server</tspan></text>
     <use
        x="0"
        y="0"
@@ -245,18 +248,18 @@
        height="1052.3622" />
     <path
        style="fill:none;stroke:#000000;stroke-width:1.79999995;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none;marker-start:url(#Arrow1Mstart);marker-end:url(#Arrow1Mend)"
-       d="M 191.09395,723.67305 177.01309,898.12307"
+       d="M 196.80823,720.81591 182.72737,895.26593"
        id="path4341"
        sodipodi:nodetypes="cc" />
     <path
        id="path4717"
-       d="m 243.86698,722.24448 178.02515,44.15457"
+       d="m 249.58126,719.38734 178.02515,44.15457"
        style="fill:none;stroke:#000000;stroke-width:1.79999995;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none;marker-start:url(#Arrow1Mstart);marker-end:url(#Arrow1Mend)"
        sodipodi:nodetypes="cc" />
     <path
        sodipodi:nodetypes="cc"
        style="fill:none;stroke:#000000;stroke-width:1.79999995;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none;marker-start:url(#Arrow1Mstart);marker-end:url(#Arrow1Mend)"
-       d="M 244.35411,689.10443 473.83074,647.98929"
+       d="M 250.06839,686.24729 479.54502,645.13215"
        id="path4719" />
   </g>
 </svg>
