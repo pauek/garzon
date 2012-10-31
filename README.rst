@@ -6,7 +6,9 @@ Garzón is a "judge" system, an automatic problem corrector. You submit
 solutions to problems and Garzón accepts or rejects them. It is
 inspired by the way programming contests work. The system has three
 parts: a load balancer (the 'server'), several workers, and a virtual
-machine or VM that each worker controls.
+machine or VM that each worker controls:
+
+.. image:: doc/arch.png
 
 There are separate directories for each part:
 
@@ -42,8 +44,8 @@ to the qcow format, suitable for snapshotting with QEmu.
 
 The worker first launches a non-graphical instance of QEmu, which will
 look for the environment variable GARZON_VMS, and will by default use
-garzon.qcow2 as image. This enables the use of different images for
-different purposes. The grz-worker options are::
+``garzon.qcow2`` as image. This enables the use of different images for
+different purposes. The options are::
 
     $ grz-worker -help
     Usage of grz-worker:
@@ -51,8 +53,8 @@ different purposes. The grz-worker options are::
       -image="garzon.qcow2": Specify image file to use
       -prepare=false: Only create the snapshot
 
-You can see the QEmu console using ``-graphic=true``, specify the image,
-and for he first run, do a ``-prepare``, which does a snapshot of the
+You can 1) see the QEmu console using ``-graphic=true``, 2) specify the image,
+and 3) for the first run, do a ``-prepare``, which does a snapshot of the
 clean state of the virtual machine.
 
 ``server``
@@ -67,11 +69,11 @@ connections from workers.
 
 When evaluating a submission, you just call::
 
-    server.Judge(submission server.Submission, report func(msg string)) (veredict string, err error)
+    func Judge(submission Submission, report func(msg string)) (veredict string, err error)
 
 This function will evaluate the submission using one of the available
 workers, optionally notify progress by using the ``report`` callback,
-and will return the ``veredict`` (or an error).
+and will return the ``veredict`` (or an ``error``).
 
 ``example-server``
 ------------------
