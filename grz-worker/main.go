@@ -280,6 +280,8 @@ func RemoveISO() error {
 func Eval(problemDir string, solution []byte, report func(msg string)) (veredict string, err error) {
 	CreateCurrentDir()
 
+	report("Preparing...")
+
 	if err := CreateISO(problemDir, solution); err != nil {
 		return "", err
 	}
