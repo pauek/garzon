@@ -17,7 +17,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	submission := gsrv.Submission{"/home/pauek/Academio/Problems/Test/42", []byte("43")}
+	submission := gsrv.Submission{"/home/pauek/Academio/Problems/Test/42", []byte("42")}
 	if err := websocket.JSON.Send(ws, submission); err != nil {
 		log.Fatalf("Cannot send: %s", err)
 	}

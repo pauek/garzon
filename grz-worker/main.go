@@ -346,10 +346,12 @@ func main() {
 	qemu.LoadVM()
 	defer qemu.Quit()
 
+	grzServer := "localhost:8080"
+
 	for {
 		// Connect Loop
-		origin := "http://localhost/"
-		url := "ws://localhost:8080/worker"
+		origin := fmt.Sprintf("http://%s/", grzServer)
+		url := fmt.Sprintf("ws://%s/_new_worker", grzServer)
 		for ws, err = websocket.Dial(url, "", origin); err != nil; {
 			log.Printf("Error dialing: %s", err)
 			time.Sleep(5 * time.Second)

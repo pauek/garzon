@@ -91,7 +91,7 @@ func newWorker(ws *websocket.Conn) {
 	}
 }
 
-func Submit(subm Submission, report func(msg string)) (veredict string, err error) {
+func Judge(subm Submission, report func(msg string)) (veredict string, err error) {
 	if numWorkers == 0 {
 		return "ERROR", fmt.Errorf("No workers")
 	}
@@ -100,7 +100,7 @@ func Submit(subm Submission, report func(msg string)) (veredict string, err erro
 	case jobs <- &newjob:
 		var s string
 		for s = range newjob.updates {
-			if !strings.HasPrefix(s, "VEREDICT\n") {
+			if !strings.HasPrefix(s, "VEREDICT\n") && report != nil {
 				report(s)
 			}
 		}
@@ -111,6 +111,6 @@ func Submit(subm Submission, report func(msg string)) (veredict string, err erro
 	return veredict, nil
 }
 
-func Handle(path string) {
-	http.Handle(path, websocket.Handler(newWorker))
+func Handle() {
+	http.Handle("/_new_worker", websocket.Handler(newWorker))
 }

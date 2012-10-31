@@ -14,7 +14,7 @@ func newSubmission(ws *websocket.Conn) {
 	if err != nil {
 		log.Printf("Error receiving job: %s", err)
 	}
-	veredict, err := gsrv.Submit(subm, func (msg string) {
+	veredict, err := gsrv.Judge(subm, func (msg string) {
 		websocket.JSON.Send(ws, msg)
 	})
 	if err != nil {
@@ -29,7 +29,7 @@ func hRoot(w http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
-	gsrv.Handle("/worker")
+	gsrv.Handle()
 	http.Handle("/submit", websocket.Handler(newSubmission))
 	http.HandleFunc("/", hRoot)
 	log.Fatal(http.ListenAndServe(":8080", nil))
