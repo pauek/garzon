@@ -349,7 +349,7 @@ func main() {
 	for {
 		// Connect Loop
 		origin := "http://localhost/"
-		url := "ws://localhost:6060/worker"
+		url := "ws://localhost:8080/worker"
 		for ws, err = websocket.Dial(url, "", origin); err != nil; {
 			log.Printf("Error dialing: %s", err)
 			time.Sleep(5 * time.Second)

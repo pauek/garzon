@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"code.google.com/p/go.net/websocket"
@@ -30,6 +30,7 @@ func sendProblem(ws *websocket.Conn, job *Job) error {
 }
 
 func handleJob(ws *websocket.Conn, job *Job) error {
+	// Send to worker
 	websocket.JSON.Send(ws, job.Submission)
 	var reply string
 	if err := websocket.JSON.Receive(ws, &reply); err != nil {
@@ -40,11 +41,12 @@ func handleJob(ws *websocket.Conn, job *Job) error {
 		return nil
 	case "send problem":
 		sendProblem(ws, job)
+		return nil
 	case "ok":
 	}
-	log.Printf(`Submitting: %s`, job.Submission.ProblemID)
+	log.Printf(`Submitted: %s`, job.Submission.ProblemID)
 
-	// Wait for updates
+	// Wait for updates (& veredict)
 	var msg string
 	for {
 		if err := websocket.JSON.Receive(ws, &msg); err != nil {
@@ -89,30 +91,26 @@ func newWorker(ws *websocket.Conn) {
 	}
 }
 
-func newSubmission(ws *websocket.Conn) {
-	var newjob Job
-	err := websocket.JSON.Receive(ws, &newjob.Submission)
-	if err != nil {
-		log.Printf("Error receiving job: %s", err)
-	}
+func Submit(subm Submission, report func(msg string)) (veredict string, err error) {
 	if numWorkers == 0 {
+		return "ERROR", fmt.Errorf("No workers")
 	}
-	newjob.updates = make(chan string)
+	newjob := Job{subm, make(chan string)}
 	select {
 	case jobs <- &newjob:
-		for msg := range newjob.updates {
-			websocket.JSON.Send(ws, msg)
+		var s string
+		for s = range newjob.updates {
+			if !strings.HasPrefix(s, "VEREDICT\n") {
+				report(s)
+			}
 		}
-		ws.Close()
+		veredict = s[len("VEREDICT\n"):]
 	case <-time.After(5 * time.Second):
-		log.Printf("Cannot send jobs (no workers?)")
-		websocket.JSON.Send(ws, "Cannot evaluate submission")
-		ws.Close()
+		return "ERROR", fmt.Errorf("No worker responding")
 	}
+	return veredict, nil
 }
 
-func main() {
-	http.Handle("/worker", websocket.Handler(newWorker))
-	http.Handle("/submit", websocket.Handler(newSubmission))
-	log.Fatal(http.ListenAndServe(":6060", nil))
+func Handle(path string) {
+	http.Handle(path, websocket.Handler(newWorker))
 }

@@ -2,25 +2,22 @@ package main
 
 import (
 	"code.google.com/p/go.net/websocket"
+	gsrv "garzon/server"
 	"fmt"
 	"io"
 	"log"
+	"strings"
 )
-
-type Submission struct {
-	ProblemID string
-	Data      []byte
-}
 
 func main() {
 	origin := "http://localhost/"
-	url := "ws://localhost:6060/submit"
+	url := "ws://localhost:8080/submit"
 	ws, err := websocket.Dial(url, "", origin)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	submission := Submission{"/home/pauek/Academio/Problems/Test/42", []byte("42")}
+	submission := gsrv.Submission{"/home/pauek/Academio/Problems/Test/42", []byte("43")}
 	if err := websocket.JSON.Send(ws, submission); err != nil {
 		log.Fatalf("Cannot send: %s", err)
 	}
@@ -33,6 +30,6 @@ func main() {
 		if err != nil {
 			log.Printf("Error receiving: %s", err)
 		}
-		fmt.Printf("                                  \r%s", update)
+		fmt.Printf("\r%s\r%s", strings.Repeat(" ", 80), update)
 	}
 }
