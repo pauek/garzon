@@ -119,7 +119,8 @@ const problem = `
 <script>
 
 function submit() {
-   ws = new WebSocket("ws://localhost:7070/submit")
+   var host = document.location.host;
+   ws = new WebSocket("ws://" + host + "/submit")
    ws.onopen  = function () { 
       console.log("Connected!");
       ws.send(JSON.stringify({
