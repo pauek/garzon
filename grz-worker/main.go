@@ -361,10 +361,12 @@ func main() {
 	qemu.LoadVM()
 	defer qemu.Quit()
 
-	grzServer := "localhost:8080"
+	grzServer := os.Getenv("GARZON_SERVER")
+	if grzServer == "" {
+		grzServer = "localhost:7070"
+	}
 
 	for {
-
 		// Connect Loop
 		origin := fmt.Sprintf("http://%s/", grzServer)
 		url := fmt.Sprintf("ws://%s/_new_worker", grzServer)
