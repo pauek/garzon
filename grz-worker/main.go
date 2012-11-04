@@ -9,8 +9,10 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -341,6 +343,14 @@ func main() {
 	EnsureHomeDir()
 	CreateTempDir()
 	defer RemoveTempDir()
+
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigs
+		RemoveTempDir()
+		os.Exit(0)
+	}()
 
 	qemu = NewVM(image)
 
