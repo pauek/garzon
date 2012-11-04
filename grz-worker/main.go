@@ -3,6 +3,7 @@ package main
 import (
 	"code.google.com/p/go.net/websocket"
 	"crypto/sha1"
+	gsrv "garzon/server"
 	"flag"
 	"fmt"
 	"io"
@@ -389,10 +390,7 @@ func main() {
 
 		for {
 			// Receive job
-			var submission struct {
-				ProblemID string
-				Data      []byte
-			}
+			var submission gsrv.Submission
 			err = websocket.JSON.Receive(ws, &submission)
 			if err != nil {
 				log.Printf("Cannot receive job: %s", err)
@@ -443,7 +441,7 @@ func main() {
 			log.Printf("Uncompressed '%s'", filename)
 
 			// Eval
-			veredict, err = Eval(tmpdir, data, func(update string) {
+			veredict, err = Eval(tmpdir, []byte(data), func(update string) {
 				websocket.JSON.Send(ws, update)
 			})
 			if err != nil {

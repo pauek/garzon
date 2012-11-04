@@ -16,18 +16,12 @@ import (
 
 var numWorkers int32 = 0
 
-var grzPath string
+var ProblemPath = "."
 
-func init() {
-	grzPath = os.Getenv("GARZON_PATH")
-	if grzPath == "" {
-		grzPath = "."
-	}
-}
 
 type Submission struct {
 	ProblemID string
-	Data      []byte
+	Data      string
 }
 
 type Problem struct {
@@ -50,7 +44,7 @@ func isDir(dir string) bool {
 }
 
 func findProblem(id string) (dir string) {
-	for _, root := range filepath.SplitList(grzPath) {
+	for _, root := range filepath.SplitList(ProblemPath) {
 		dir = filepath.Join(root, id)
 		if isDir(dir) {
 			return
@@ -134,7 +128,7 @@ func handleJob(ws *websocket.Conn, job *Job) error {
 }
 
 func isAlive(ws *websocket.Conn) error {
-	return handleJob(ws, &Job{Submission{"", []byte{}}, nil})
+	return handleJob(ws, &Job{Submission{"", ""}, nil})
 }
 
 func newWorker(ws *websocket.Conn) {

@@ -4,9 +4,63 @@ import (
 	"code.google.com/p/go.net/websocket"
 	"fmt"
 	gsrv "garzon/server"
+	T "html/template"
 	"log"
+	"io/ioutil"
 	"net/http"
+	"os"
+	"path/filepath"
 )
+
+type Problem struct {
+	ID    string
+	Title string
+	Dir   string
+}
+
+var Problems = make(map[string]Problem)
+
+func subdirs(dirname string) (dirs []string) {
+	f, err := os.Open(dirname)
+	if err != nil {
+		return nil
+	}
+	list, err := f.Readdir(-1)
+	f.Close()
+	if err != nil {
+		return nil
+	}
+	for _, d := range list {
+		if d.IsDir() && d.Name()[0] != '.' {
+			dirs = append(dirs, filepath.Join(dirname, d.Name()))
+		}
+	}
+	return
+}
+
+func ProblemCatalog(path string) {
+	for _, root := range filepath.SplitList(path) {
+		for _, subdir := range subdirs(root) {
+			for _, problem := range subdirs(subdir) {
+				ID, err := filepath.Rel(root, problem)
+				if err != nil {
+					log.Fatalf("Boum! %s", err)
+				}
+				Problems[ID] = Problem{ID, filepath.Base(problem), problem}
+			}
+		}
+	}
+}
+
+func init() {
+	path := &gsrv.ProblemPath
+	*path = os.Getenv("GARZON_PATH")
+	if *path == "" {
+		*path = "."
+	}
+	ProblemCatalog(*path)
+	gsrv.Handle()
+}
 
 func newSubmission(ws *websocket.Conn) {
 	var subm gsrv.Submission
@@ -14,23 +68,107 @@ func newSubmission(ws *websocket.Conn) {
 	if err != nil {
 		log.Printf("Error receiving job: %s", err)
 	}
-	veredict, err := gsrv.Judge(subm, func (msg string) {
+	veredict, err := gsrv.Judge(subm, func(msg string) {
 		websocket.JSON.Send(ws, msg)
 	})
 	if err != nil {
 		veredict = fmt.Sprintf("Error: %s", err)
-	} 
+	}
 	websocket.JSON.Send(ws, veredict)
 }
 
+const index = `
+<!doctype html>
+<html>
+  <head>
+    <title>Example Judge</title>
+  </head>
+  <body>
+    <h1>Problems</h1>
+    <ol>{{range .}}
+       <li><a href="/p/{{.ID}}">{{.Title}}</a></li>{{end}}
+    </ol>
+  </body>
+</html>
+`
+
+const problem = `
+<!doctype html>
+<html>
+<head>
+  <title>Problem: {{.problem.Title}}</title>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+</head>
+<body>
+  <h1>{{.problem.Title}}</h1>
+  {{.doc}}
+  <h2>Submit</h2>
+  <textarea id="solution"></textarea><br />
+  <button>Submit</button>
+  <div id="status"></div>
+<script>
+
+function submit() {
+   ws = new WebSocket("ws://localhost:7070/submit")
+   ws.onopen  = function () { 
+      console.log("Connected!");
+      ws.send(JSON.stringify({
+         ProblemID: "{{.problem.ID}}", 
+         Data: $("textarea").val(),
+      }));
+   }
+   ws.onclose = function () { 
+      console.log("Disconnected!"); 
+   }
+   ws.onmessage = function (e) {
+      var msg = JSON.parse(e.data);
+      $("#status").html("<pre>" + msg + "</pre>");
+   }
+}
+$(document).ready(function () {
+   $("button").click(submit);
+})
+</script>
+</body>
+</html>
+`
+
+var tIndex = T.Must(T.New("index").Parse(index))
+var tProblem = T.Must(T.New("problem").Parse(problem))
+
 func hRoot(w http.ResponseWriter, req *http.Request) {
-	// TODO: List (and link) problems
-	fmt.Fprintf(w, "hello, world!")
+	err := tIndex.Execute(w, Problems)
+	if err != nil {
+		fmt.Println("ERROR", err)
+	}
+}
+
+func hProblem(w http.ResponseWriter, req *http.Request) {
+	id := req.URL.Path[len("/p/"):]
+	prob, ok := Problems[id]
+	if !ok {
+		http.Error(w, "Not Found", http.StatusNotFound)
+	}
+	var doc string
+	docfilename := filepath.Join(prob.Dir, "doc.html")
+	if docfile, err := os.Open(docfilename); err == nil {
+		if _doc, err := ioutil.ReadAll(docfile); err == nil {
+			doc = string(_doc)
+		}
+		docfile.Close()
+	}
+	err := tProblem.Execute(w, map[string]interface{}{
+		"doc":     T.HTML(doc),
+		"problem": prob,
+	})
+	if err != nil {
+		fmt.Println("ERROR", err)
+	}
 }
 
 func main() {
-	gsrv.Handle()
 	http.Handle("/submit", websocket.Handler(newSubmission))
 	http.HandleFunc("/", hRoot)
+	http.HandleFunc("/p/", hProblem)
 	log.Fatal(http.ListenAndServe(":7070", nil))
 }
