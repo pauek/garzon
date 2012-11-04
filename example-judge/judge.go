@@ -143,7 +143,7 @@ $(document).ready(function () {
    editor = CodeMirror.fromTextArea(document.getElementById("code"), {
       lineNumbers: true,
       matchBrackets: true,
-      mode: "text/x-csrc"
+      mode: "text/x-c++src"
    });
 })
 </script>
