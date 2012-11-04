@@ -32,5 +32,5 @@ func main() {
 	gsrv.Handle()
 	http.Handle("/submit", websocket.Handler(newSubmission))
 	http.HandleFunc("/", hRoot)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":7070", nil))
 }
