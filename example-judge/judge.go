@@ -96,14 +96,24 @@ const problem = `
 <!doctype html>
 <html>
 <head>
-  <title>Problem: {{.problem.Title}}</title>
-  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+   <title>Problem: {{.problem.Title}}</title>
+   <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+   <link rel="stylesheet" href="/js/codemirror.css">
+   <script src="/js/codemirror.js"></script>
+   <script src="/js/clike.js"></script>
+   <style>
+     .CodeMirror { 
+        border: 1px solid #abb; 
+        font-family: "Source Code Pro"; 
+        font-size: 12;
+     }
+   </style>
 </head>
 <body>
   <h1>{{.problem.Title}}</h1>
   {{.doc}}
   <h2>Submit</h2>
-  <textarea id="solution"></textarea><br />
+  <textarea id="code"></textarea><br />
   <button>Submit</button>
   <div id="status"></div>
 <script>
@@ -114,7 +124,7 @@ function submit() {
       console.log("Connected!");
       ws.send(JSON.stringify({
          ProblemID: "{{.problem.ID}}", 
-         Data: $("textarea").val(),
+         Data: editor.getValue(),
       }));
    }
    ws.onclose = function () { 
@@ -125,8 +135,16 @@ function submit() {
       $("#status").html("<pre>" + msg + "</pre>");
    }
 }
+
+var editor;
+
 $(document).ready(function () {
    $("button").click(submit);
+   editor = CodeMirror.fromTextArea(document.getElementById("code"), {
+      lineNumbers: true,
+      matchBrackets: true,
+      mode: "text/x-csrc"
+   });
 })
 </script>
 </body>
@@ -168,6 +186,7 @@ func hProblem(w http.ResponseWriter, req *http.Request) {
 
 func main() {
 	http.Handle("/submit", websocket.Handler(newSubmission))
+	http.Handle("/js/", http.FileServer(http.Dir(".")))
 	http.HandleFunc("/", hRoot)
 	http.HandleFunc("/p/", hProblem)
 	log.Fatal(http.ListenAndServe(":7070", nil))
