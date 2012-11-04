@@ -1,18 +1,24 @@
 package main
 
 import (
-	"flag"
 	"code.google.com/p/go.net/websocket"
-	gsrv "garzon/server"
+	"flag"
 	"fmt"
+	gsrv "garzon/server"
 	"io"
 	"log"
+	"os"
 	"strings"
 )
 
 func main() {
-	origin := "http://localhost/"
-	url := "ws://localhost:8080/submit"
+	grzServer := os.Getenv("GARZON_SERVER")
+	if grzServer == "" {
+		grzServer = "localhost:7070"
+	}
+
+	origin := "http://" + grzServer + "/"
+	url := "ws://" + grzServer + "/submit"
 
 	flag.Parse()
 	if len(flag.Args()) < 1 {
