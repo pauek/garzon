@@ -1,0 +1,76 @@
+{{define "index"}}
+<!doctype html>
+<html>
+  <head>
+    <title>Example Judge</title>
+    <style> 
+      ul { list-style-type: none; } 
+    </style>
+  </head>
+  <body>
+    <h1>Problems</h1>
+    {{.Html}}
+  </body>
+</html>
+{{end}}
+
+{{define "problem"}}
+<!doctype html>
+<html>
+<head>
+   <title>Problem: {{.problem.Title}}</title>
+   <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+   <link rel="stylesheet" href="/js/codemirror.css">
+   <script src="/js/codemirror.js"></script>
+   <script src="/js/clike.js"></script>
+   <style>
+      pre { margin-left: 2em; background: #ddd; padding: .5em 1em; }
+     .CodeMirror { 
+        border: 1px solid #abb; 
+        font-family: "Source Code Pro"; 
+        font-size: 12;
+     }
+   </style>
+</head>
+<body>
+  <h1>{{.problem.Title}}</h1>
+  {{.doc}}
+  <h2>Submit</h2>
+  <textarea id="code"></textarea><br />
+  <button>Submit</button>
+  <div id="status"></div>
+<script>
+
+function submit() {
+   var host = document.location.host;
+   ws = new WebSocket("ws://" + host + "/submit")
+   ws.onopen  = function () { 
+      console.log("Connected!");
+      ws.send(JSON.stringify({
+         ProblemID: "{{.problem.Path}}", 
+         Data: editor.getValue(),
+      }));
+   }
+   ws.onclose = function () { 
+      console.log("Disconnected!"); 
+   }
+   ws.onmessage = function (e) {
+      var msg = JSON.parse(e.data);
+      $("#status").html("<pre>" + msg + "</pre>");
+   }
+}
+
+var editor;
+
+$(document).ready(function () {
+   $("button").click(submit);
+   editor = CodeMirror.fromTextArea(document.getElementById("code"), {
+      lineNumbers: true,
+      matchBrackets: true,
+      mode: "text/x-c++src"
+   });
+})
+</script>
+</body>
+</html>
+{{end}}
