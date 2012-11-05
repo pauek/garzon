@@ -1,24 +1,94 @@
 package main
 
 import (
+	"bytes"
 	"code.google.com/p/go.net/websocket"
 	"fmt"
 	gsrv "garzon/server"
 	T "html/template"
-	"log"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
-type Problem struct {
-	ID    string
-	Title string
-	Dir   string
+type Item struct {
+	Title, Root, Path string
+	Items []*Item
+}
+var courses Item
+
+func NewItem(absdir, root string) (I *Item) {
+	I = &Item{}
+	I.Title = filepath.Base(absdir)
+	I.Root = root
+	path, err := filepath.Rel(root, absdir)
+	if err != nil {
+		panic(err)
+	}
+	I.Path = path
+	return
 }
 
-var Problems = make(map[string]Problem)
+func (I *Item) Dir() string { return filepath.Join(I.Root, I.Path) }
+
+func (I *Item) IsGroup() bool { return len(I.Items) > 0 }
+
+func (I *Item) Find(path string) *Item {
+	if path == "" {
+		return I
+	}
+	base, rest := path, ""
+	if i := strings.Index(path, "/"); i != -1 {
+		base, rest = path[:i], path[i+1:]
+	}
+	for _, item := range I.Items {
+		if base == item.Title {
+			return item.Find(rest)
+		}
+	}
+	return nil
+}
+
+func (I *Item) Read() {
+	if subdirs := subdirs(I.Dir()); len(subdirs) > 0 {
+		I.Items = make([]*Item, len(subdirs))
+		for i := range I.Items {
+			I.Items[i] = NewItem(subdirs[i], I.Root)
+			I.Items[i].Read()
+		}
+	}
+}
+
+const group = `<h2>{{.Title}}</h2>
+<ul>{{range .Items}}
+   <li>{{.Html}}</li>{{end}}
+</ul>
+`
+const item = `<a href="/p/{{.Path}}">{{.Title}}</a>`
+
+var tGroup = T.Must(T.New("group").Parse(group))
+var tItem = T.Must(T.New("group").Parse(item))
+
+func (I Item) Html() T.HTML {
+	var err error
+	var b bytes.Buffer
+	if I.Title == "" {
+		for _, item := range I.Items {
+			fmt.Fprint(&b, item.Html())
+		}
+	} else if I.IsGroup() {
+		err = tGroup.Execute(&b, I)
+	} else {
+		err = tItem.Execute(&b, I)
+	}
+	if err != nil {
+		fmt.Fprintf(&b, "ERROR: %s", err)
+	}
+	return T.HTML(b.String())
+}
 
 func subdirs(dirname string) (dirs []string) {
 	f, err := os.Open(dirname)
@@ -31,24 +101,22 @@ func subdirs(dirname string) (dirs []string) {
 		return nil
 	}
 	for _, d := range list {
-		if d.IsDir() && d.Name()[0] != '.' {
+		if d.IsDir() && !startsWithAny(d.Name(), "._") {
 			dirs = append(dirs, filepath.Join(dirname, d.Name()))
 		}
 	}
 	return
 }
 
-func ProblemCatalog(path string) {
+func startsWithAny(s, chars string) bool {
+	return len(s) > 0 && strings.Index(chars, s[:1]) != -1
+}
+
+func ReadCourses(path string) {
 	for _, root := range filepath.SplitList(path) {
-		for _, subdir := range subdirs(root) {
-			for _, problem := range subdirs(subdir) {
-				ID, err := filepath.Rel(root, problem)
-				if err != nil {
-					log.Fatalf("Boum! %s", err)
-				}
-				Problems[ID] = Problem{ID, filepath.Base(problem), problem}
-			}
-		}
+		item := &Item{Title: "", Root: root, Path: ""}
+		item.Read()
+		courses.Items = append(courses.Items, item)
 	}
 }
 
@@ -58,7 +126,7 @@ func init() {
 	if *path == "" {
 		*path = "."
 	}
-	ProblemCatalog(*path)
+	ReadCourses(*path)
 	gsrv.Handle()
 }
 
@@ -82,12 +150,13 @@ const index = `
 <html>
   <head>
     <title>Example Judge</title>
+    <style> 
+      ul { list-style-type: none; } 
+    </style>
   </head>
   <body>
     <h1>Problems</h1>
-    <ol>{{range .}}
-       <li><a href="/p/{{.ID}}">{{.Title}}</a></li>{{end}}
-    </ol>
+    {{.Html}}
   </body>
 </html>
 `
@@ -102,6 +171,7 @@ const problem = `
    <script src="/js/codemirror.js"></script>
    <script src="/js/clike.js"></script>
    <style>
+      pre { margin-left: 2em; background: #ddd; padding: .5em 1em; }
      .CodeMirror { 
         border: 1px solid #abb; 
         font-family: "Source Code Pro"; 
@@ -124,7 +194,7 @@ function submit() {
    ws.onopen  = function () { 
       console.log("Connected!");
       ws.send(JSON.stringify({
-         ProblemID: "{{.problem.ID}}", 
+         ProblemID: "{{.problem.Path}}", 
          Data: editor.getValue(),
       }));
    }
@@ -156,7 +226,7 @@ var tIndex = T.Must(T.New("index").Parse(index))
 var tProblem = T.Must(T.New("problem").Parse(problem))
 
 func hRoot(w http.ResponseWriter, req *http.Request) {
-	err := tIndex.Execute(w, Problems)
+	err := tIndex.Execute(w, courses)
 	if err != nil {
 		fmt.Println("ERROR", err)
 	}
@@ -164,12 +234,18 @@ func hRoot(w http.ResponseWriter, req *http.Request) {
 
 func hProblem(w http.ResponseWriter, req *http.Request) {
 	id := req.URL.Path[len("/p/"):]
-	prob, ok := Problems[id]
-	if !ok {
+	var prob *Item
+	for _, course := range courses.Items {
+		if prob = course.Find(id); prob != nil {
+			break
+		}
+	}
+	if prob == nil {
 		http.Error(w, "Not Found", http.StatusNotFound)
+		return
 	}
 	var doc string
-	docfilename := filepath.Join(prob.Dir, "doc.html")
+	docfilename := filepath.Join(prob.Dir(), "doc.html")
 	if docfile, err := os.Open(docfilename); err == nil {
 		if _doc, err := ioutil.ReadAll(docfile); err == nil {
 			doc = string(_doc)
