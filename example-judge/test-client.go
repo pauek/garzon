@@ -24,7 +24,7 @@ func main() {
 	if len(flag.Args()) < 1 {
 		fmt.Println("usage: test-client <ProblemID> <Data>")
 	}
-	subm := gsrv.Submission{flag.Arg(0), []byte(flag.Arg(1))}
+	subm := gsrv.Submission{flag.Arg(0), flag.Arg(1)}
 
 	ws, err := websocket.Dial(url, "", origin)
 	if err != nil {
