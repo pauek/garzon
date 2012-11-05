@@ -3,9 +3,9 @@ package main
 import (
 	"code.google.com/p/go.net/websocket"
 	"crypto/sha1"
-	gsrv "garzon/server"
 	"flag"
 	"fmt"
+	gsrv "garzon/server"
 	"io"
 	"log"
 	"os"
@@ -409,7 +409,7 @@ func main() {
 
 			websocket.JSON.Send(ws, "need targz")
 			var problem struct {
-				Id string
+				Id    string
 				Targz []byte
 			}
 			err = websocket.JSON.Receive(ws, &problem)
@@ -451,7 +451,7 @@ func main() {
 			log.Printf("VEREDICT: %s", veredict)
 			websocket.JSON.Send(ws, "VEREDICT\n"+veredict)
 			continue
-			
+
 		fail:
 			log.Printf("%s: %s", msg, err)
 			websocket.JSON.Send(ws, fmt.Sprintf("ERROR: %s: %s ", msg, err))
