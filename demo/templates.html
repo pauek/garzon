@@ -18,7 +18,7 @@
 <!doctype html>
 <html>
 <head>
-   <title>Problem: {{.problem.Title}}</title>
+   <title>Problem: {{.problem.TitleNoNums}}</title>
    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
    <link rel="stylesheet" href="/js/codemirror.css">
    <script src="/js/codemirror.js"></script>
@@ -33,7 +33,8 @@
    </style>
 </head>
 <body>
-  <h1>{{.problem.Title}}</h1>
+  <a href="/">&#8617; Torna</a>
+  <h1>{{.problem.TitleNoNums}}</h1>
   {{.doc}}
   <h2>Submit</h2>
   <textarea id="code"></textarea><br />

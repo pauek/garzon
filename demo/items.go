@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	T "html/template"
 	"os"
 	"path/filepath"
@@ -29,6 +30,11 @@ func NewItem(absdir, root string) (I *Item) {
 func (I *Item) Dir() string { return filepath.Join(I.Root, I.Path) }
 
 func (I *Item) IsGroup() bool { return len(I.Items) > 0 }
+
+var nums = regexp.MustCompile(`^[0-9]+\. `)
+func (I Item) TitleNoNums() string {
+	return nums.ReplaceAllLiteralString(I.Title, "")
+}
 
 func (I *Item) Find(path string) *Item {
 	if path == "" {
@@ -78,12 +84,12 @@ func startsWithAny(s, chars string) bool {
 	return len(s) > 0 && strings.Index(chars, s[:1]) != -1
 }
 
-const group = `<h2>{{.Title}}</h2>
+const group = `<h2>{{.TitleNoNums}}</h2>
 <ul>{{range .Items}}
    <li>{{.Html}}</li>{{end}}
 </ul>
 `
-const item = `<a href="/p/{{.Path}}">{{.Title}}</a>`
+const item = `<a href="/p/{{.Path}}">{{.TitleNoNums}}</a>`
 
 var tGroup = T.Must(T.New("group").Parse(group))
 var tItem = T.Must(T.New("group").Parse(item))
