@@ -156,6 +156,7 @@ func Judge(subm Submission, report func(msg string)) (veredict string, err error
 	if numWorkers == 0 {
 		return "ERROR", fmt.Errorf("No workers")
 	}
+	report("In queue")
 	newjob := Job{subm, make(chan string)}
 	select {
 	case jobs <- &newjob:
@@ -166,8 +167,8 @@ func Judge(subm Submission, report func(msg string)) (veredict string, err error
 			}
 		}
 		veredict = s[len("VEREDICT\n"):]
-	case <-time.After(5 * time.Second):
-		return "ERROR", fmt.Errorf("No worker responding")
+	case <-time.After(10 * time.Second):
+		return "ERROR", fmt.Errorf("No worker responding: try again later")
 	}
 	return veredict, nil
 }
