@@ -40,6 +40,7 @@ func (Q *QEmu) args(addargs ...string) (args []string) {
 		"-drive", "file=" + Tmp("shared.img") + ",if=virtio",
 		"-append", fmt.Sprintf(`tce=vda kmap=qwerty/es vga=788 nodhcp grz=%s`, magicPrompt),
 		"-net", "none",
+		"-snapshot",      // Write to temp files instead of image
 		"-nographic",     // implies "-serial stdio -monitor stdio"
 	}
 	args = append(args, addargs...)
