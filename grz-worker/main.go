@@ -282,6 +282,7 @@ func RemoveISO() error {
 
 func Eval(problemDir string, solution []byte, report func(msg string)) (veredict string, err error) {
 	CreateCurrentDir()
+	defer RemoveCurrentDir()
 
 	report("Preparing...")
 
@@ -308,6 +309,7 @@ func Eval(problemDir string, solution []byte, report func(msg string)) (veredict
 			if isVeredict {
 				veredict += line + "\n" // FIXME: \r por aquí?
 			} else {
+				fmt.Printf("report: '%s'\n", line)
 				report(line)
 			}
 		}
@@ -315,7 +317,6 @@ func Eval(problemDir string, solution []byte, report func(msg string)) (veredict
 	fmt.Printf("Veredict: %s", veredict)
 	qemu.Monitor("eject ide1-cd0")
 	RemoveISO()
-	RemoveCurrentDir()
 	return
 }
 

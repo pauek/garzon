@@ -36,11 +36,10 @@ func (Q *QEmu) args(addargs ...string) (args []string) {
 	args = []string{
 		"-kernel", root + "/vmlinuz",
 		"-initrd", root + "/initrd.gz",
-		"-drive", "file=" + root + "/" + Q.Image + ",if=virtio",
+		"-drive", "file=" + root + "/" + Q.Image + ",if=virtio,snapshot=on",
 		"-drive", "file=" + Tmp("shared.img") + ",if=virtio",
 		"-append", fmt.Sprintf(`tce=vda kmap=qwerty/es vga=788 nodhcp grz=%s`, magicPrompt),
 		"-net", "none",
-		"-snapshot",      // Write to temp files instead of image
 		"-nographic",     // implies "-serial stdio -monitor stdio"
 	}
 	args = append(args, addargs...)
