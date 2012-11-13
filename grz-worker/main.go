@@ -85,7 +85,7 @@ func RemoveCurrentDir() {
 func RemoveTempDir() {
 	err := os.RemoveAll(tempdir)
 	if err != nil {
-		log.Printf("Cannot remove '%s': %s", tempdir, err)
+		log.Printf("Cannot remove temporary directory '%s': %s", tempdir, err)
 	}
 }
 
@@ -365,7 +365,7 @@ func main() {
 
 	var (
 		err error
-		msg, filename, veredict, tmpdir string
+		msg, veredict, uncompressDir, targzFile string
 		ws  *websocket.Conn
 		file *os.File
 	)
@@ -421,8 +421,8 @@ func main() {
 			log.Printf("Received problem: %d bytes", len(problem.Targz))
 
 			// Save problem + uncompress
-			filename = filepath.Join(os.TempDir(), "problem.tar.gz")
-			file, err = os.Create(filename)
+			targzFile = Tmp("problem.tar.gz")
+			file, err = os.Create(targzFile)
 			if err != nil {
 				msg = "Error saving problem.tar.gz"
 				goto fail
@@ -432,17 +432,17 @@ func main() {
 				msg = "Cannot write tar.gz"
 				goto fail
 			}
-			tmpdir = filepath.Join(os.TempDir(), "garzon")
-			ensureTempDir(tmpdir)
-			err = exec.Command("tar", "-xzf", filename, "-C", tmpdir).Run()
+			uncompressDir = Tmp("garzon")
+			ensureTempDir(uncompressDir)
+			err = exec.Command("tar", "-xzf", targzFile, "-C", uncompressDir).Run()
 			if err != nil {
-				msg = fmt.Sprintf("Cannot uncompress '%s'", filename)
+				msg = fmt.Sprintf("Cannot uncompress '%s'", targzFile)
 				goto fail
 			}
-			log.Printf("Uncompressed '%s'", filename)
+			log.Printf("Uncompressed '%s'", targzFile)
 
 			// Eval
-			veredict, err = Eval(tmpdir, []byte(data), func(update string) {
+			veredict, err = Eval(uncompressDir, []byte(data), func(update string) {
 				websocket.JSON.Send(ws, update)
 			})
 			if err != nil {
