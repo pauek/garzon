@@ -309,12 +309,15 @@ func Eval(problemDir string, solution []byte, report func(msg string)) (veredict
 			if isVeredict {
 				veredict += line + "\n" // FIXME: \r por aquí?
 			} else {
-				fmt.Printf("report: '%s'\n", line)
+				log.Printf("report: '%s'\n", line)
 				report(line)
 			}
 		}
 	}) // execute judge
-	fmt.Printf("Veredict: %s", veredict)
+	if veredict == "" {
+		veredict = "Judge Failed"
+	}
+	log.Printf("Veredict: %s", veredict)
 	qemu.Monitor("eject ide1-cd0")
 	RemoveISO()
 	return
@@ -407,6 +410,7 @@ func main() {
 				continue
 			}
 			log.Printf("Received job '%s': %d bytes", id, len(data))
+			log.Printf("Data:\n%s", data)
 
 			websocket.JSON.Send(ws, "need targz")
 			var problem struct {
