@@ -252,7 +252,7 @@ EOF
 }
 
 
-# createimg <file.img>
+# createimg <file.img> <integer size in Mb>
 function createimg() {
     file=$1
     sz=$2
@@ -425,7 +425,7 @@ command:
     unpack <initrd.gz> <dir>
     repack <initrd.gz> <dir>
     remaster <core.gz> <initrd.gz>
-    createimg <file.img>
+    createimg <file.img> <integer size in Mb>
     pkglist
     pkgclean
     install <file.img> packages...
