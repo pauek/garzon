@@ -446,7 +446,7 @@ func main() {
 			log.Printf("Uncompressed '%s'", targzFile)
 
 			// Eval
-			veredict, err = Eval(uncompressDir, []byte(data), func(update string) {
+			veredict, err = Eval(uncompressDir, data, func(update string) {
 				websocket.JSON.Send(ws, update)
 			})
 			if err != nil {

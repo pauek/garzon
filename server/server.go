@@ -18,10 +18,9 @@ var numWorkers int32 = 0
 
 var ProblemPath = "."
 
-
 type Submission struct {
 	ProblemID string
-	Data      string
+	Data      []byte
 }
 
 type Problem struct {
@@ -128,7 +127,7 @@ func handleJob(ws *websocket.Conn, job *Job) error {
 }
 
 func isAlive(ws *websocket.Conn) error {
-	return handleJob(ws, &Job{Submission{"", ""}, nil})
+	return handleJob(ws, &Job{Submission{"", nil}, nil})
 }
 
 func newWorker(ws *websocket.Conn) {
