@@ -25,17 +25,19 @@ function _cached_download() {
     pkg=$1
     if ! [ -f ${pkg} ]; then
         if [ -f $HOME/.grz/cache/${pkg} ]; then 
-            echo -n " [from cache]"
             sudo cp $HOME/.grz/cache/${pkg} ${pkg}
+            echo "[C] "${pkg}
         else
             # porqué no puedo poner 'curl' aquí !?!?
+            echo -n "[D] "${pkg}
             sudo wget -q ${mirror}${tcz_dir}${pkg}
             if [ -f ${pkg} ]; then
                 cp ${pkg} $HOME/.grz/cache/${pkg}
             fi
+            echo
         fi
     else
-        echo -n " [already installed]"
+        echo "[A] "${pkg}
     fi
 }
 
@@ -43,9 +45,7 @@ function _download_packages() {
     _silent pushd tce/optional
     for file in $*; do
         for ext in .tcz .tcz.dep; do
-            echo -n ${file}${ext}
             _cached_download ${file}${ext}
-            echo
         done
     done
     _silent popd
