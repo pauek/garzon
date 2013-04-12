@@ -29,24 +29,32 @@ function _cached_download() {
             echo "[C] "${pkg}
         else
             # porqué no puedo poner 'curl' aquí !?!?
-            echo -n "[D] "${pkg}
             sudo wget -q ${mirror}${tcz_dir}${pkg}
             if [ -f ${pkg} ]; then
+                echo "[D] "${pkg}
                 cp ${pkg} $HOME/.grz/cache/${pkg}
             fi
-            echo
         fi
     else
         echo "[A] "${pkg}
     fi
 }
 
+function _download_pkg() {
+    file=$1
+    _cached_download ${file}.tcz
+    _cached_download ${file}.tcz.dep
+    if [ -f $HOME/.grz/cache/${file}.tcz.dep ]; then
+        for dep in $(cat $HOME/.grz/cache/${file}.tcz.dep); do
+            _download_pkg ${dep%.tcz}
+        done
+    fi
+}
+
 function _download_packages() {
     _silent pushd tce/optional
     for file in $*; do
-        for ext in .tcz .tcz.dep; do
-            _cached_download ${file}${ext}
-        done
+        _download_pkg ${file}
     done
     _silent popd
 }
@@ -72,7 +80,7 @@ function _purge() {
 
 function _onboot() {
     for file in $*; do
-        echo $file | sudo sh -c "cat >> tce/onboot.lst"
+        echo ${file}.tcz | sudo sh -c "cat >> tce/onboot.lst"
     done
 }
 
@@ -109,8 +117,8 @@ function _image_init() {
     sudo mkdir -p tce/{optional,ondemand}
     sudo touch tce/onboot.lst
     sudo touch tce/bootlocal.sh # this is called from /opt/bootlocal.sh
-    _download_packages mirrors kmaps
-    _onboot mirrors.tcz kmaps.tcz
+    _download_packages mirrors kmaps coreutils
+    _onboot mirrors kmaps coreutils
 }
 
 # init 
@@ -298,7 +306,14 @@ function _install_gcc() {
     _image_mount $1
     _download_packages gcc gcc_libs binutils gmp mpfr eglibc_base-dev libmpc 
     echo "eglibc_base-dev.tcz" | sudo sh -c "cat >> tce/optional/gcc.tcz.dep"
-    _onboot gcc.tcz
+    _onboot gcc
+    _image_umount
+}
+
+function _install_python() {
+    _image_mount $1
+    _download_packages python
+    _onboot python
     _image_umount
 }
 
@@ -362,8 +377,9 @@ function install() {
     shift
     for pkg in $*; do
         case $pkg in
-            gcc) _install_gcc ${imgfile} ;;
-            go)  _install_go  ${imgfile} ;;
+            gcc)    _install_gcc ${imgfile} ;;
+            go)     _install_go  ${imgfile} ;;
+            python) _install_python ${imgfile} ;;
         esac
     done
 }
