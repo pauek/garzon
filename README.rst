@@ -28,7 +28,7 @@ creating a virtual machine are::
 
    $ grz-vm download
    $ grz-vm remaster core.gz initrd.gz
-   $ grz-vm createimg garzon.img
+   $ grz-vm createimg garzon.img 400M
    $ grz-vm install garzon.img go gcc
    $ grz-vm convert garzon.img garzon.qcow2
 
