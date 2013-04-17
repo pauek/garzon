@@ -2,13 +2,20 @@
 <!doctype html>
 <html>
   <head>
-    <title>Example Judge</title>
+    <title>Jutge EDOO</title>
     <style> 
-      ul { list-style-type: none; } 
+      body { margin: 1.5em; }
+      h1, h2 { margin: .2em 0 .2em; font-family: sans-serif; }
+      ul { 
+         list-style-type: none; 
+         padding-left: 1em;
+      } 
+      ul.L1 > li > h2 { font-size: 1.2em; margin-top: 1em; }
+      ul.L2 > li > h2 { font-size: 1.0em; margin-top: .5em; }
+      ul.L3 > li > h2 { font-size: 0.75em; }
     </style>
   </head>
   <body>
-    <h1>Problems</h1>
     {{.Html}}
   </body>
 </html>
@@ -19,51 +26,223 @@
 <html>
 <head>
    <title>Problem: {{.problem.TitleNoNums}}</title>
-   <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+   <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
    <link rel="stylesheet" href="/js/codemirror.css">
    <script src="/js/codemirror.js"></script>
    <script src="/js/clike.js"></script>
    <style>
+      body { margin: 1.5em; }
+      footer { min-height: 5em; }
+      h2 { margin: .2em 0 .2em; font-family: sans-serif; }
       pre { margin-left: 2em; background: #ddd; padding: .5em 1em; }
-     .CodeMirror { 
-        border: 1px solid #abb; 
-        font-family: "Source Code Pro"; 
-        font-size: 12;
-     }
+      #veredict {
+         min-heigth: 1em;
+         padding: .4em .8em .3em; 
+         font-family: sans-serif;
+         font-weight: bold;
+         border-radius: .3em;
+      }
+      #veredict.accept {
+         background: #90f190;
+         color: #0f5f0f;
+      }
+      #veredict.error {
+         background: #f19090;
+         color: #5f0f0f;
+      }
+      #description pre { 
+         margin: 0; 
+         background: white;
+         border: 1px solid #ddd;
+         border-radius: .2em;
+       }
+      .CodeMirror { 
+         border: 1px solid #abb; 
+         font-family: Source Code Pro, Consolas, Monaco, monospaced;
+         font-size: 12;
+         margin-top: 1em;
+         background: white;
+      }
+      .CodeMirror-scroll {
+         height: auto;
+         overflow-y: hidden;
+         overflow-x: auto;
+      }
+      #status pre { margin: 0; }
+      #envia { width: 100px; height: 32px; font-weight: bold; font-size: 1em; }
+      textarea {
+         background: white;
+      }
+      .tabbed { margin-top: 2em; margin-bottom: 1em; }
+      .tabbed ul {
+         list-style-type: none;
+         margin: 0;
+         padding: 0;
+      }
+      .tabbed ul li {
+         font-family: sans-serif;
+         color: #777;
+         display: inline-block;
+         padding: .6em 1em;
+         background: white;
+         cursor: pointer;
+         border-top: 1px solid #d7d7d7;
+         border-left: 1px solid #d7d7d7;
+         border-right: 1px solid #d7d7d7;
+      }
+      .tabbed ul li.active {
+         color: black;
+         background: #d7d7d7;
+      }
+      .tab {
+         display: none;
+         padding: .5em;
+         background: #d7d7d7;
+      }
+      .tab.active {
+         display: block;
+      }
    </style>
 </head>
 <body>
   <a href="/">&#8617; Torna</a>
   <h1>{{.problem.TitleNoNums}}</h1>
   {{.doc}}
-  <h2>Submit</h2>
-  <textarea id="code"></textarea><br />
-  <button>Submit</button>
-  <div id="status"></div>
-<script>
 
-function submit() {
+<div class="tabbed">
+  <ul class="buttons">
+    <li class="active">Edita</li>
+    <li>Escull un fitxer</li>
+  </ul>
+  <div class="tab active">
+    <textarea id="code">
+
+
+
+
+    </textarea>
+  </div>
+  <div class="tab">
+    <input type="file" name="fitxer" />
+  </div>
+</div>
+<table style="width: 100%">
+  <tr>
+    <td width="10%" valign="center"><button id="envia">Envia</button></td>
+    <td width="40%" valign="center"><div id="veredict"></div></td>
+    <td width="50%"></td>
+  </tr>
+</table>
+<div id="description"></div>
+<footer></footer>
+
+<script>
+function resetVeredict() {
+   $("#veredict").removeClass("accept");
+   $("#veredict").removeClass("error");
+   $("#veredict").html("Enviant...");
+   $("#description").hide();
+}
+
+function show(veredict, description) {
+   if (description == "") {
+      resetVeredict()      
+   } else if (veredict == "Acceptat") {
+      $("#veredict").addClass("accept");
+   } else {
+      $("#veredict").addClass("error");
+   }
+   $("#veredict").html(veredict);
+   console.log(description);
+   if (description != "" && description != "\n") {
+      $("#description").show();
+      $("#description").html("<pre>" + description + "</pre>");
+   }
+}
+
+function _submit(data) {
    var host = document.location.host;
+   resetVeredict();
+   if (!("WebSocket" in window)) {
+      var v = "No es pot enviar";
+      var d = "Has d'utilitzar un navegador més modern! (amb WebSockets)";
+      show(v, d);
+   }
    ws = new WebSocket("ws://" + host + "/submit")
    ws.onopen  = function () { 
       console.log("Connected!");
-      ws.send(JSON.stringify({
+      var subm = JSON.stringify({
          ProblemID: "{{.problem.Path}}", 
-         Data: editor.getValue(),
-      }));
+         Data: data,
+      });
+      ws.send(subm);
    }
    ws.onclose = function () { 
       console.log("Disconnected!"); 
    }
    ws.onmessage = function (e) {
-      var msg = JSON.parse(e.data);
-      $("#status").html("<pre>" + msg + "</pre>");
+      var msg = JSON.parse(e.data), v, d;
+      var cr = msg.indexOf("\n");
+      if (cr == -1) {
+         v = msg;
+         d = "";
+      } else {
+         v = msg.substr(0, cr);
+         d = msg.substr(cr);
+      }
+      show(v, d);
+   }
+}
+
+var files;
+
+function submitFile() {
+   console.log(files);
+   var reader = new FileReader();
+   reader.onload = function(e) {
+      var arraybuf = e.target.result;
+      var bufview = new Uint8Array(arraybuf);
+      var bytes = new Array(bufview.length);
+      for (var i = 0; i < bufview.length; i++) {
+         bytes[i] = bufview[i];
+      }
+      _submit(bytes);
+   }
+   reader.readAsArrayBuffer(files[0]);
+}
+
+function stringToBytes(str) {
+   var bytes = new Array(str.length);
+   for (var i = 0; i < str.length; i++) {
+      bytes[i] = str.charCodeAt(i);
+   }
+   return bytes;
+}
+
+function submit() {
+   var active = $(".tabbed ul li.active").html();
+   if (active == "Edita") {
+      _submit(stringToBytes(editor.getValue()));
+   } else if (active == "Escull un fitxer") {
+      submitFile();
+   } else {
+      console.log("submit what??");
    }
 }
 
 var editor;
 
 $(document).ready(function () {
+   $(".tabbed ul li").click(function (e) {
+      var i = $(this).index();
+      $(".tabbed ul li").removeClass("active");
+      $(this).addClass("active");
+      $(".tabbed .tab").removeClass("active");
+      $(".tabbed .tab:eq(" + i + ")").addClass("active");
+   });
+   $('input[type=file]').change(function (e) {
+      files = e.target.files;
+   });
    $("button").click(submit);
    editor = CodeMirror.fromTextArea(document.getElementById("code"), {
       lineNumbers: true,
