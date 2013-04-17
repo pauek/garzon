@@ -2,7 +2,7 @@
 <!doctype html>
 <html>
   <head>
-    <title>Jutge EDOO</title>
+    <title>Judge Demo</title>
     <style> 
       body { margin: 1.5em; }
       h1, h2 { margin: .2em 0 .2em; font-family: sans-serif; }
@@ -111,7 +111,7 @@
 
 <div class="tabbed">
   <ul class="buttons">
-    <li class="active">Edita</li>
+    <li class="active">Edit</li>
     <li>Escull un fitxer</li>
   </ul>
   <div class="tab active">
@@ -147,7 +147,7 @@ function resetVeredict() {
 function show(veredict, description) {
    if (description == "") {
       resetVeredict()      
-   } else if (veredict == "Acceptat") {
+   } else if (veredict == "Accepted") {
       $("#veredict").addClass("accept");
    } else {
       $("#veredict").addClass("error");
@@ -164,8 +164,8 @@ function _submit(data) {
    var host = document.location.host;
    resetVeredict();
    if (!("WebSocket" in window)) {
-      var v = "No es pot enviar";
-      var d = "Has d'utilitzar un navegador més modern! (amb WebSockets)";
+      var v = "Cannot send";
+      var d = "You should use a more modern browser (with WebSockets)";
       show(v, d);
    }
    ws = new WebSocket("ws://" + host + "/submit")
@@ -221,9 +221,9 @@ function stringToBytes(str) {
 
 function submit() {
    var active = $(".tabbed ul li.active").html();
-   if (active == "Edita") {
+   if (active == "Edit") {
       _submit(stringToBytes(editor.getValue()));
-   } else if (active == "Escull un fitxer") {
+   } else if (active == "Choose a file") {
       submitFile();
    } else {
       console.log("submit what??");
