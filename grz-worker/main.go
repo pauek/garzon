@@ -20,6 +20,7 @@ import (
 var (
 	tempdir string
 	homedir string
+	qemu    *QEmu
 )
 
 const sharedImgSize = 20 // in MB
@@ -152,12 +153,11 @@ func CompileJudgeInVM(judgesrc, judgebin string) error {
 	ext := filepath.Ext(judgesrc)
 
 	// Transfer sources to VM
-	written, err := CopyFile(Tmp("shared.img"), judgesrc, -1)
+	err := qemu.CopyToVM("/tmp/"+base, judgesrc)
 	if err != nil {
 		return fmt.Errorf("Cannot copy '%s' to shared image: %s", judgesrc, err)
 	}
-	qemu.Shell(fmt.Sprintf("dd if=/dev/vdb of=/tmp/%s bs=1 count=%d", base, written))
-	qemu.Shell("export PATH=$PATH:/usr/local/bin:/mnt/vda/src/go/bin")
+	qemu.Shell("export PATH=$PATH:/mnt/vda/src/go/bin")
 
 	// Compile
 	var cmd string
@@ -182,17 +182,11 @@ func CompileJudgeInVM(judgesrc, judgebin string) error {
 	}
 
 	// Get the binary from VM
-	output := qemu.Shell("dd if=/tmp/judge.bin of=/dev/vdb bs=1")
-	qemu.Shell("sync")
-	var bytes int64
-	fmt.Sscanf(output, "%d", &bytes)
-	_, err = CopyFile(judgebin, Tmp("shared.img"), bytes)
+	err = qemu.CopyToHost(judgebin, "/tmp/judge.bin")
 	if err != nil {
-		return fmt.Errorf("Cannot copy shared image to '%s': %s", judgebin, err)
+		return fmt.Errorf("Cannot copy VM file to '%s': %s", judgebin, err)
 	}
-
 	qemu.Reset()
-
 	return nil
 }
 
@@ -324,7 +318,6 @@ func Eval(problemDir string, solution []byte, report func(msg string)) (veredict
 }
 
 var (
-	qemu    *QEmu
 	image   string
 	prepare bool
 )
@@ -340,40 +333,30 @@ func ensureTempDir(tmpdir string) {
 	}
 }
 
-func main() {
-	flag.StringVar(&image, "image", "garzon.qcow2", "Specify image file to use")
-	flag.BoolVar(&prepare, "prepare", false, "Only create the snapshot")
-	flag.Parse()
-
-	EnsureHomeDir()
-	CreateTempDir()
-	defer RemoveTempDir()
-
+func CatchTermination() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigs
 		RemoveTempDir()
+		qemu.Kill()
 		os.Exit(0)
 	}()
+}
 
-	qemu = NewVM(image)
-
-	if prepare {
-		qemu.Start()
-		qemu.Save()
-		qemu.Quit()
-		return
-	}
-
+func Serve() {
 	var (
-		err error
+		err                                     error
 		msg, veredict, uncompressDir, targzFile string
-		ws  *websocket.Conn
-		file *os.File
+		ws                                      *websocket.Conn
+		file                                    *os.File
 	)
 
-	qemu.LoadVM()
+	qemu, err = NewVM(image)
+	if err != nil {
+		log.Fatalf("Cannot create VM: %s", err)
+	}
+	qemu.LoadVM("1")
 	defer qemu.Quit()
 
 	grzServer := os.Getenv("GARZON_SERVER")
@@ -464,5 +447,52 @@ func main() {
 
 		// Close connection
 		ws.Close()
+	}
+}
+
+func Prepare() {
+	var err error
+	qemu, err = NewVM(image)
+	if err != nil {
+		log.Fatalf("Cannot create VM: %s", err)
+	}
+	qemu.Prepare()
+	qemu.Quit()
+}
+
+func Test1() {
+	var err error
+	qemu, err = NewVM(image)
+	if err != nil {
+		log.Fatalf("Cannot create VM: %s", err)
+	}
+	qemu.LoadVM("1")
+	err = qemu.CopyToVM("/tmp/pauek", "/home/pauek/pauek")
+	if err != nil {
+		log.Printf("ERROR: Cannot copy to vm: %s", err)
+	}
+	qemu.Shell("ls -l /tmp/")
+	qemu.Shell("base64 /tmp/pauek")
+	err = qemu.CopyToHost("/home/pauek/fromvm", "/bin/busybox")
+	if err != nil {
+		log.Printf("ERROR: Cannot copy to host: %s", err)
+	}
+	qemu.Quit()
+}
+
+func main() {
+	flag.StringVar(&image, "image", "garzon.qcow2", "Specify image file to use")
+	flag.BoolVar(&prepare, "prepare", false, "Only create the snapshot")
+	flag.Parse()
+
+	EnsureHomeDir()
+	CreateTempDir()
+	defer RemoveTempDir()
+	CatchTermination()
+
+	if prepare {
+		Prepare()
+	} else {
+		Serve()
 	}
 }
