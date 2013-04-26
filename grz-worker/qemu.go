@@ -52,6 +52,7 @@ var iofile string
 
 func (Q *QEmu) args(addargs ...string) (args []string) {
 	args = []string{
+		"-machine", "type=pc,accel=kvm",
 		"-kernel", Q.Filename("kernel"), 
 		"-initrd", Q.Filename("initrd"),
 		"-append", fmt.Sprintf(`tce=vda nodhcp grz=%s`, magicPrompt),
@@ -90,13 +91,13 @@ func (Q *QEmu) Prepare() {
 }
 
 func (Q *QEmu) Start() error {
-	Q.cmd = exec.Command("kvm", Q.args()...)
+	Q.cmd = exec.Command("qemu-system-i386", Q.args()...)
 	return Q.start(false)
 }
 
 func (Q *QEmu) StartAndReset() error {
 	Q.Log(`LoadVM("%s")`, SNAPSHOT_NAME)
-	Q.cmd = exec.Command("kvm", Q.args("-loadvm", SNAPSHOT_NAME)...)
+	Q.cmd = exec.Command("qemu-system-i386", Q.args("-loadvm", SNAPSHOT_NAME)...)
 	return Q.start(true)
 }
 
