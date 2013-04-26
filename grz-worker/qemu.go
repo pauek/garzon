@@ -2,16 +2,15 @@ package main
 
 import (
 	"crypto/sha1"
-	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"strconv"
 )
 
 type QEmu struct {
@@ -247,8 +246,6 @@ func (Q *QEmu) Reset() {
 	}
 }
 
-const limit = 512 // experimental limit size of shell command (?)
-
 func (Q *QEmu) CopyToGuest(vmfile, hostfile string) error {
 	Q.Log(`CopyToVM("%s", "%s")`, vmfile, hostfile)
 
@@ -271,7 +268,12 @@ func (Q *QEmu) CopyToGuest(vmfile, hostfile string) error {
 			return
 		}
 		Q.Log(`Sent %d bytes`, bytes)
-		goerr = conn.Close()
+		if err := fin.Close(); err != nil {
+			goerr = fmt.Errorf(`QEmu.CopyToGuest: Cannot close file %s: %s`, hostfile, err)
+		}
+		if err := fin.Close(); err != nil {
+			goerr = fmt.Errorf(`QEmu.CopyToGuest: Cannot close connection: %s`, err)
+		}
 	}()
 
 	// 2. Copy the file
@@ -287,14 +289,51 @@ func (Q *QEmu) CopyToGuest(vmfile, hostfile string) error {
 
 func (Q *QEmu) CopyToHost(hostfile, vmfile string) error {
 	Q.Log(`CopyToHost("%s", "%s")`, hostfile, vmfile)
-	b64 := Q.Shell(fmt.Sprintf(`base64 %s`, vmfile))
-	data, err := base64.StdEncoding.DecodeString(b64)
+
+	// 0. Find out the size of the file
+	output := Q.Shell(fmt.Sprintf(`ls -l %s | tr -s ' ' | cut -d' ' -f5`, vmfile))
+	output = output[:len(output)-2] // get rid of '\r\n'
+	nbytes, err := strconv.ParseInt(output, 10, 64)
 	if err != nil {
-		return fmt.Errorf("QEmu.CopyToHost: Cannot DecodeString: %s", err)
+		return fmt.Errorf(`QEmu.CopyToHost: Cannot determine file size from '%s': %s`, output, err)
 	}
-	err = ioutil.WriteFile(hostfile, data, 0600)
+	Q.Log("nbytes: %d", nbytes)
+
+	// 1. Pipe the file
+	var goerr error
+	finished := make(chan bool)
+	go func() {
+		output := Q.Shell(fmt.Sprintf(`cat %s > /dev/virtio-ports/io.0`, vmfile))
+		if output != "" {
+			goerr = fmt.Errorf("QEmu.CopyToGuest: cat command returned something: %s", output)
+		}
+		finished <- true
+	}()
+
+	// 2. Launch goroutine that copies file from socket
+	fout, err := os.Create(hostfile)
 	if err != nil {
-		return fmt.Errorf("QEmu.CopyToHost: Cannot WriteFile: %s", err)
+		// TODO: stop the pipe goroutine
+		return fmt.Errorf(`QEmu.CopyToHost: Cannot create '%s': %s`, hostfile, err)
+	}
+	conn, err := net.Dial("unix", Q.Filename("io"))
+	if err != nil {
+		return fmt.Errorf(`QEmu.CopyToHost: Cannot dial unix socket: %s`, err)
+	}
+	ncopied, err := io.CopyN(fout, conn, nbytes)
+	if err != nil {
+		return fmt.Errorf(`QEmu.CopyToHost: Cannot copy from unix socket: %s`, err)
+	}
+	Q.Log(`Received %d bytes`, ncopied)
+	if err := fout.Close(); err != nil {
+		return fmt.Errorf(`QEmu.CopyToHost: Cannot close file: %s`, err)
+	}
+	if err := conn.Close(); err != nil {
+		return fmt.Errorf(`QEmu.CopyToHost: Cannot close connection: %s`, err)
+	}
+	<- finished
+	if goerr != nil {
+		return goerr
 	}
 	return nil
 }

@@ -473,13 +473,12 @@ func Test1() {
 	}
 	qemu.ShellLog("ls -l /tmp/")
 	qemu.ShellLog("md5sum /tmp/test")
-	/*
+
 	err = qemu.CopyToHost("/home/pauek/fromvm", "/bin/busybox")
 	if err != nil {
 		log.Printf("ERROR: Cannot copy to host: %s", err)
 	}
 	qemu.ShellLog("md5sum /bin/busybox")
-	 */
 	qemu.Quit()
 }
 
