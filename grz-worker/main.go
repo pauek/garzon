@@ -153,7 +153,7 @@ func CompileJudgeInVM(judgesrc, judgebin string) error {
 	ext := filepath.Ext(judgesrc)
 
 	// Transfer sources to VM
-	err := qemu.CopyToVM("/tmp/"+base, judgesrc)
+	err := qemu.CopyToGuest("/tmp/"+base, judgesrc)
 	if err != nil {
 		return fmt.Errorf("Cannot copy '%s' to shared image: %s", judgesrc, err)
 	}
@@ -356,7 +356,7 @@ func Serve() {
 	if err != nil {
 		log.Fatalf("Cannot create VM: %s", err)
 	}
-	qemu.LoadVM("1")
+	qemu.StartAndReset()
 	defer qemu.Quit()
 
 	grzServer := os.Getenv("GARZON_SERVER")
@@ -466,17 +466,20 @@ func Test1() {
 	if err != nil {
 		log.Fatalf("Cannot create VM: %s", err)
 	}
-	qemu.LoadVM("1")
-	err = qemu.CopyToVM("/tmp/pauek", "/home/pauek/pauek")
+	qemu.StartAndReset()
+	err = qemu.CopyToGuest("/tmp/test", "/home/pauek/rnd")
 	if err != nil {
 		log.Printf("ERROR: Cannot copy to vm: %s", err)
 	}
-	qemu.Shell("ls -l /tmp/")
-	qemu.Shell("base64 /tmp/pauek")
+	qemu.ShellLog("ls -l /tmp/")
+	qemu.ShellLog("md5sum /tmp/test")
+	/*
 	err = qemu.CopyToHost("/home/pauek/fromvm", "/bin/busybox")
 	if err != nil {
 		log.Printf("ERROR: Cannot copy to host: %s", err)
 	}
+	qemu.ShellLog("md5sum /bin/busybox")
+	 */
 	qemu.Quit()
 }
 
@@ -493,6 +496,7 @@ func main() {
 	if prepare {
 		Prepare()
 	} else {
-		Serve()
+		Test1()
+		// Serve()
 	}
 }

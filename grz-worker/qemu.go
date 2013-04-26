@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 
 type QEmu struct {
 	Image  string
+	Root   string
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser
 	stdout io.ReadCloser
@@ -35,14 +37,33 @@ func (Q *QEmu) Log(format string, a ...interface{}) {
 	log.Printf(format, a...)
 }
 
+func (Q *QEmu) Filename(which string) (filename string) { 
+	filename = Q.Root + "/"
+	switch which {
+	case "kernel": filename += "vmlinuz"
+	case "initrd": filename += "initrd.gz"
+	case "image":  filename += Q.Image
+	case "io":     filename += Q.Image + ".io"
+	}
+	return 
+}
+
+
+var iofile string
+
 func (Q *QEmu) args(addargs ...string) (args []string) {
-	root := os.Getenv("GARZON_VMS")
 	args = []string{
-		"-kernel", root + "/vmlinuz",
-		"-initrd", root + "/initrd.gz",
+		"-kernel", Q.Filename("kernel"), 
+		"-initrd", Q.Filename("initrd"),
 		"-append", fmt.Sprintf(`tce=vda nodhcp grz=%s`, magicPrompt),
-		"-drive", "file=" + root + "/" + Q.Image + ",if=virtio",
+		"-drive", fmt.Sprintf(`file=%s,if=virtio`, Q.Filename("image")),
 		"-net", "none",
+		"-usb",
+		// IO using a virtio serial port
+		"-device", "virtio-serial",
+		"-chardev", fmt.Sprintf(`socket,path=%s,server,nowait,id=io`, Q.Filename("io")),
+		"-device", "virtserialport,chardev=io,name=io.0",
+		// 
 		"-nographic", // implies "-serial stdio -monitor stdio"
 	}
 	args = append(args, addargs...)
@@ -55,15 +76,9 @@ func NewVM(image string) (Q *QEmu, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("Cannot find image '%s'", image)
 	}
-	/*
-	file, err := os.Create("qemu.log")
-	if err != nil {
-		log.Fatalf("Cannot open 'qemu.log'")
-	}
-	 */
 	Q = &QEmu{
 		Image:   image,
-		// logfile: file,
+		Root:    root,
 	}
 	return
 }
@@ -80,9 +95,9 @@ func (Q *QEmu) Start() error {
 	return Q.start(false)
 }
 
-func (Q *QEmu) LoadVM(snapshot string) error {
-	Q.Log(`LoadVM("%s")`, snapshot)
-	Q.cmd = exec.Command("kvm", Q.args("-loadvm", snapshot)...)
+func (Q *QEmu) StartAndReset() error {
+	Q.Log(`LoadVM("%s")`, SNAPSHOT_NAME)
+	Q.cmd = exec.Command("kvm", Q.args("-loadvm", SNAPSHOT_NAME)...)
 	return Q.start(true)
 }
 
@@ -158,7 +173,7 @@ func (Q *QEmu) emitCtrlA_C() {
 	// Q.logfile.Write([]byte{0x01, 0x63})
 }
 
-func (Q *QEmu) Monitor(cmd string) {
+func (Q *QEmu) Monitor(cmd string) (output string) {
 	Q.fresh = false
 
 	// Activate monitor
@@ -168,11 +183,12 @@ func (Q *QEmu) Monitor(cmd string) {
 	// Execute command
 	Q.Log("Monitor: '%s'", cmd)
 	Q.emit(cmd)
-	Q.waitForPrompt("(qemu) ", nil)
+	output = Q.waitForPrompt("(qemu) ", nil)
 
 	// Activate console
 	Q.emitCtrlA_C()
 	Q.waitForPrompt("\n", nil) // eat up '\n' produced by QEmu
+	return
 }
 
 func (Q *QEmu) Shell(cmd string) string {
@@ -233,29 +249,39 @@ func (Q *QEmu) Reset() {
 
 const limit = 512 // experimental limit size of shell command (?)
 
-func (Q *QEmu) CopyToVM(vmfile, hostfile string) error {
+func (Q *QEmu) CopyToGuest(vmfile, hostfile string) error {
 	Q.Log(`CopyToVM("%s", "%s")`, vmfile, hostfile)
-	f, err := os.Open(hostfile)
-	if err != nil {
-		return fmt.Errorf("QEmu.CopyTo: Cannot open infile: %s", err)
-	}
-	data, err := ioutil.ReadAll(f)
-	if err != nil {
-		return fmt.Errorf("QEmu.CopyTo: Cannot ReadAll: %s", err)
-	}
-	b64 := base64.StdEncoding.EncodeToString(data)
-	Q.Shell(fmt.Sprintf(`rm %s.base64`, vmfile))
-	// Cut the string in pieces due to the limits in shell commands (?)
-	for i := 0; i < len(b64); i = i + limit {
-		j := i + limit
-		if j > len(b64) {
-			j = len(b64)
+
+	// 1. Prepare goroutine that copies file to socket
+	var goerr error
+	go func() {
+		fin, err := os.Open(hostfile)
+		if err != nil {
+			goerr = err
+			return
 		}
-		cmd := fmt.Sprintf(`echo -n "%s" >> %s.base64`, b64[i:j], vmfile)
-		Q.Shell(cmd)
+		conn, err := net.Dial("unix", Q.Filename("io"))
+		if err != nil {
+			goerr = err
+			return
+		}
+		bytes, err := io.Copy(conn, fin)
+		if err != nil {
+			goerr = err
+			return
+		}
+		Q.Log(`Sent %d bytes`, bytes)
+		goerr = conn.Close()
+	}()
+
+	// 2. Copy the file
+	output := Q.Shell(fmt.Sprintf(`cat /dev/virtio-ports/io.0 > %s`, vmfile))
+	if output != "" {
+		return fmt.Errorf("QEmu.CopyToGuest: cat command returned something: %s", output)
 	}
-	Q.Shell(fmt.Sprintf("ls -l %s.base64", vmfile))
-	Q.Shell(fmt.Sprintf("base64 -d %s.base64 > %s", vmfile, vmfile))
+	if goerr != nil {
+		return fmt.Errorf("QEmu.CopyToGuest: copy to socket failed: %s", goerr)
+	}
 	return nil
 }
 
