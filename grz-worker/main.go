@@ -23,8 +23,6 @@ var (
 	qemu    *QEmu
 )
 
-const sharedImgSize = 20 // in MB
-
 func EnsureHomeDir() {
 	homedir = filepath.Join(os.Getenv("HOME"), ".grz")
 	judgesdir := filepath.Join(homedir, "judges")
@@ -46,21 +44,9 @@ func TryTempDir(i int) bool {
 	return false
 }
 
-func CreateSharedImg() {
-	file, err := os.Create(Tmp("shared.img"))
-	if err != nil {
-		log.Fatalf("Cannot create '%s': %s", Tmp("shared.img"), err)
-	}
-	for i := 0; i < sharedImgSize; i++ {
-		file.Write(make([]byte, 1024*1024)) // 1MB
-	}
-	file.Close()
-}
-
 func CreateTempDir() {
 	for i := 0; i < 100; i++ {
 		if TryTempDir(i) {
-			CreateSharedImg()
 			return
 		}
 	}
@@ -155,7 +141,7 @@ func CompileJudgeInVM(judgesrc, judgebin string) error {
 	// Transfer sources to VM
 	err := qemu.CopyToGuest("/tmp/"+base, judgesrc)
 	if err != nil {
-		return fmt.Errorf("Cannot copy '%s' to shared image: %s", judgesrc, err)
+		return fmt.Errorf("Cannot copy '%s' to guest: %s", judgesrc, err)
 	}
 	qemu.Shell("export PATH=$PATH:/mnt/vda/src/go/bin")
 
@@ -215,7 +201,7 @@ func CompileAndLinkJudge(problemDir string) error {
 		log.Printf("Cannot compute sha1sum of '%s': %s", judgesrc, err)
 	}
 
-	// Look for already compiled judge otherwise compile it
+	// Look for already compiled judge, otherwise compile it
 	judgebin := filepath.Join(homedir, "judges/"+sha1)
 	if _, err1 := os.Stat(judgebin); err1 != nil {
 		if err2 := CompileJudgeInVM(judgesrc, judgebin); err2 != nil {
@@ -495,7 +481,7 @@ func main() {
 	if prepare {
 		Prepare()
 	} else {
-		Test1()
-		// Serve()
+		// Test1()
+		Serve()
 	}
 }
