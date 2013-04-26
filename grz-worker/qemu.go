@@ -252,6 +252,7 @@ func (Q *QEmu) CopyToGuest(vmfile, hostfile string) error {
 
 	// 1. Prepare goroutine that copies file to socket
 	var goerr error
+	finished := make(chan bool)
 	go func() {
 		fin, err := os.Open(hostfile)
 		if err != nil {
@@ -272,9 +273,10 @@ func (Q *QEmu) CopyToGuest(vmfile, hostfile string) error {
 		if err := fin.Close(); err != nil {
 			goerr = fmt.Errorf(`QEmu.CopyToGuest: Cannot close file %s: %s`, hostfile, err)
 		}
-		if err := fin.Close(); err != nil {
+		if err := conn.Close(); err != nil {
 			goerr = fmt.Errorf(`QEmu.CopyToGuest: Cannot close connection: %s`, err)
 		}
+		finished <- true
 	}()
 
 	// 2. Copy the file
@@ -282,6 +284,8 @@ func (Q *QEmu) CopyToGuest(vmfile, hostfile string) error {
 	if output != "" {
 		return fmt.Errorf("QEmu.CopyToGuest: cat command returned something: %s", output)
 	}
+	<-finished
+	Q.Log(`Finished`)
 	if goerr != nil {
 		return fmt.Errorf("QEmu.CopyToGuest: copy to socket failed: %s", goerr)
 	}
