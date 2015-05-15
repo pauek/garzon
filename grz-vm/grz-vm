@@ -1,6 +1,6 @@
 #!/bin/bash
 
-mirror="http://l4u-00.jinr.ru/LinuxArchive/Ftp/tinycorelinux/"
+mirror="http://distro.ibiblio.org/tinycorelinux/"
 dist_dir="4.x/x86/release/distribution_files/"
 tcz_dir="4.x/x86/tcz/"
 
@@ -11,10 +11,10 @@ function _download() {
             read resp
             if [ $resp == "y" ]; then
                 rm -f $file
-                wget -q ${mirror}${dist_dir}${file}
+                wget ${mirror}${dist_dir}${file}
             fi
         else 
-            wget -q ${mirror}${dist_dir}${file}
+            wget ${mirror}${dist_dir}${file}
         fi
     done
 }
@@ -321,53 +321,19 @@ function _install_python() {
 function _install_go() {
     imgfile=$1
     _image_mount ${imgfile} # checks if imgfile exists
-
-    # Decompress source
-    sudo mkdir src
-    _silent pushd src
-    gosrc=go1.0.3.src.tar.gz
-    if ! [ -f $gosrc ]; then
-        _report "Downloading Go source... " sudo wget http://go.googlecode.com/files/$gosrc
+    gobin=go1.4.2.linux-386.tar.gz
+    if ! [ -f $gobin ]; then
+        _report "Downloading Go... " sudo wget https://storage.googleapis.com/golang/${gobin}
     fi
-    _report "Decompressing Go source... " sudo tar xzvf $gosrc
-    _silent popd
-
-    # Install bash + gcc (+ linux headers)
-    _download_packages bash ncurses ncurses-common \
-        gcc gcc_libs binutils gmp mpfr eglibc_base-dev libmpc \
-        linux-3.0.1_api_headers
-
-    _image_umount
-
-    # Compile Go inside the VM
-    (cat <<EOF
-PS1=''
-su tc -c "tce-load -i bash"
-su tc -c "tce-load -i gcc"
-su tc -c "tce-load -i eglibc_base-dev.tcz"
-su tc -c "tce-load -i linux-3.0.1_api_headers"
-export PATH=/usr/local/bin:\$PATH
-cd /mnt/vda/src/go/src
-bash ./make.bash
-poweroff
-EOF
-    ) | kvm -kernel vmlinuz \
-            -initrd initrd.gz \
-            -append "tce=vda kmap=qwerty/es vga=788 nodhcp" \
-            -drive file=${imgfile},if=virtio \
-            -nographic \
-            -m 512M
-
-    # Set environment + erase unneeded packages
-    _image_mount ${imgfile}
+    _report "Decompressing Go... " sudo tar xzvf ${gobin}
     sudo sh -c "cat >> tce/bootlocal.sh" <<EOF
 cat >> /etc/profile.d/go.sh <<INNEREOF
 # Go Environment
-export GOROOT=/mnt/vda/src/go
-export PATH=\\\$PATH:\\\$GOROOT/bin
+export GOROOT=/mnt/vda/go
+export PATH=\\\$PATH:/mnt/vda/go/bin
 INNEREOF
 EOF
-    _purge bash ncurses ncurses-common linux-3.0.1_api_headers
+    sudo chmod +x tce/bootlocal.sh
     _image_umount
 }
 
@@ -439,8 +405,8 @@ usage: grz-vm <command> [arguments]
 
 command:
     download
-    unpack <initrd.gz> <dir>
-    repack <initrd.gz> <dir>
+    ( unpack <core.gz> <dir> )
+    ( repack <dir> <initrd.gz> )
     remaster <core.gz> <initrd.gz>
     createimg <file.img> <integer size in Mb>
     pkglist

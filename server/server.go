@@ -1,17 +1,18 @@
 package server
 
 import (
-	"code.google.com/p/go.net/websocket"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
-	"io/ioutil"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"code.google.com/p/go.net/websocket"
 )
 
 var numWorkers int32 = 0
@@ -155,7 +156,9 @@ func Judge(subm Submission, report func(msg string)) (veredict string, err error
 	if numWorkers == 0 {
 		return "ERROR", fmt.Errorf("No workers")
 	}
-	report("In queue")
+	if report != nil {
+		report("In queue")
+	}
 	newjob := Job{subm, make(chan string)}
 	select {
 	case jobs <- &newjob:
@@ -166,6 +169,7 @@ func Judge(subm Submission, report func(msg string)) (veredict string, err error
 			}
 		}
 		veredict = s[len("VEREDICT\n"):]
+
 	case <-time.After(10 * time.Second):
 		return "ERROR", fmt.Errorf("No worker responding: try again later")
 	}

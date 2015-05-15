@@ -1,7 +1,6 @@
 package main
 
 import (
-	"code.google.com/p/go.net/websocket"
 	"crypto/sha1"
 	"flag"
 	"fmt"
@@ -15,6 +14,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"code.google.com/p/go.net/websocket"
 )
 
 var (
@@ -143,7 +144,8 @@ func CompileJudgeInVM(judgesrc, judgebin string) error {
 	if err != nil {
 		return fmt.Errorf("Cannot copy '%s' to guest: %s", judgesrc, err)
 	}
-	qemu.Shell("export PATH=$PATH:/mnt/vda/src/go/bin")
+	qemu.Shell("export GOROOT=/mnt/vda/go")
+	qemu.Shell("export PATH=$PATH:/mnt/vda/go/bin")
 
 	// Compile
 	var cmd string
