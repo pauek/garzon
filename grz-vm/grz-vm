@@ -1,6 +1,6 @@
 #!/bin/bash
 
-mirror="http://distro.ibiblio.org/tinycorelinux/"
+mirror="http://ftp.nluug.nl/os/Linux/distr/tinycorelinux/"
 dist_dir="4.x/x86/release/distribution_files/"
 tcz_dir="4.x/x86/tcz/"
 
@@ -205,7 +205,7 @@ function remaster() {
     sudo mkdir -p mnt/cdrom
 
     # WARNING: si pones una '/' delante
-    # de todos los paths tipo 'cat > path' te cargas tu Linux!!
+    # de todos los paths tipo 'cat >> path' te cargas tu Linux!!
 
     # enable root terminal on serial port
     sudo sh -c "cat >> etc/inittab" <<EOF
@@ -239,7 +239,7 @@ shash=\$(sha1sum /mnt/cdrom/solution | cut -d' ' -f1)
 su garzon -c "
 cd /mnt/cdrom/problem;
 echo \$shash;
-PATH=\$PATH:/usr/local/bin:/usr/local/sbin:/mnt/vda/src/go/bin ../judge < ../solution > /tmp/output-\$shash;
+PATH=\$PATH:/usr/local/bin:/usr/local/sbin:/mnt/vda/go/bin ../judge < ../solution > /tmp/output-\$shash;
 echo \$shash;
 cat /tmp/output-\$shash;
 rm -f /tmp/output-\$shash;
@@ -303,18 +303,10 @@ function pkgclean() {
 
 ## Installation scripts ####################################################
 
-function _install_gcc() {
+function _install() {
     _image_mount $1
-    _download_packages gcc gcc_libs binutils gmp mpfr eglibc_base-dev libmpc 
-    echo "eglibc_base-dev.tcz" | sudo sh -c "cat >> tce/optional/gcc.tcz.dep"
-    _onboot gcc
-    _image_umount
-}
-
-function _install_python() {
-    _image_mount $1
-    _download_packages python
-    _onboot python
+    _download_packages $2
+    _onboot $2
     _image_umount
 }
 
@@ -327,13 +319,13 @@ function _install_go() {
     fi
     _report "Decompressing Go... " sudo tar xzvf ${gobin}
     sudo sh -c "cat >> tce/bootlocal.sh" <<EOF
-cat >> /etc/profile.d/go.sh <<INNEREOF
+cat > /etc/profile.d/go.sh <<INNEREOF
 # Go Environment
 export GOROOT=/mnt/vda/go
 export PATH=\\\$PATH:/mnt/vda/go/bin
 INNEREOF
+chmod +x /etc/profile.d/go.sh
 EOF
-    sudo chmod +x tce/bootlocal.sh
     _image_umount
 }
 
@@ -344,9 +336,9 @@ function install() {
     shift
     for pkg in $*; do
         case $pkg in
-            gcc)    _install_gcc ${imgfile} ;;
-            go)     _install_go  ${imgfile} ;;
-            python) _install_python ${imgfile} ;;
+            gcc)    _install    ${imgfile} gcc ;;
+            python) _install    ${imgfile} python ;;
+            go)     _install_go ${imgfile} ;;
         esac
     done
 }
@@ -374,6 +366,10 @@ function convert() {
 
 function launch() {
     imgname=$1
+    if [ -z $imgname ]; then
+        echo "usage: grz-vm launch <image-file>"
+        exit 1
+    fi
     if ! [ -f $imgname ]; then
         echo "error: image '"$imgname"' doesn't exist"
         exit 1
